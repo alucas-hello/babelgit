@@ -57,13 +57,38 @@
       {
         "command": "babelgit.pause",
         "title": "Babel: Pause"
+      },
+      {
+        "command": "babelgit.continueItem",
+        "title": "Babel: Continue"
       }
     ],
-    "views": {
-      "explorer": [
+    "viewsContainers": {
+      "activitybar": [
         {
-          "id": "babelgitWorkItem",
-          "name": "babelgit"
+          "id": "babelgit",
+          "title": "babelgit",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "babelgit": [
+        {
+          "id": "babelgitActive",
+          "name": "Active Work"
+        },
+        {
+          "id": "babelgitCheckpoints",
+          "name": "Checkpoints"
+        },
+        {
+          "id": "babelgitPaused",
+          "name": "Paused Work"
+        },
+        {
+          "id": "babelgitActions",
+          "name": "Quick Actions"
         }
       ]
     },
@@ -71,12 +96,12 @@
       "view/title": [
         {
           "command": "babelgit.state",
-          "when": "view == babelgitWorkItem",
+          "when": "view == babelgitActive",
           "group": "navigation"
         },
         {
           "command": "babelgit.history",
-          "when": "view == babelgitWorkItem",
+          "when": "view == babelgitActive",
           "group": "navigation"
         }
       ]

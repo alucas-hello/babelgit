@@ -46,16 +46,22 @@ function activate(context) {
     const watcher = new stateWatcher_1.StateWatcher();
     const runner = new babelRunner_1.BabelRunner(outputChannel);
     const statusBar = new statusBar_1.StatusBarManager(watcher);
-    const sidebar = new sidebarProvider_1.SidebarProvider(watcher);
-    vscode.window.createTreeView('babelgitWorkItem', {
-        treeDataProvider: sidebar,
-        showCollapseAll: true,
-    });
-    const cmd = (id, fn) => vscode.commands.registerCommand(id, async () => {
+    const activeProvider = new sidebarProvider_1.ActiveWorkProvider(watcher);
+    const checkpointsProvider = new sidebarProvider_1.CheckpointsProvider(watcher);
+    const pausedProvider = new sidebarProvider_1.PausedWorkProvider(watcher);
+    const actionsProvider = new sidebarProvider_1.ActionsProvider(watcher);
+    vscode.window.createTreeView('babelgitActive', { treeDataProvider: activeProvider });
+    vscode.window.createTreeView('babelgitCheckpoints', { treeDataProvider: checkpointsProvider });
+    vscode.window.createTreeView('babelgitPaused', { treeDataProvider: pausedProvider });
+    vscode.window.createTreeView('babelgitActions', { treeDataProvider: actionsProvider });
+    const refreshAll = () => {
+        watcher.refresh();
+    };
+    const cmd = (id, fn) => vscode.commands.registerCommand(id, async (...args) => {
         try {
-            await fn();
+            await fn(...args);
         }
-        catch (err) {
+        catch {
             // Error already shown in output channel
         }
     });
@@ -67,8 +73,7 @@ function activate(context) {
         if (!desc)
             return;
         await runner.run(['start', desc]);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.save', async () => {
         const notes = await vscode.window.showInputBox({
             prompt: 'Notes for this save',
@@ -78,12 +83,10 @@ function activate(context) {
             return;
         const args = notes ? ['save', notes] : ['save'];
         await runner.run(args);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.run', async () => {
         await runner.run(['run']);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.keep', async () => {
         const notes = await vscode.window.showInputBox({
             prompt: 'Keep — what did you verify?',
@@ -93,8 +96,7 @@ function activate(context) {
             return;
         const args = notes ? ['keep', notes] : ['keep'];
         await runner.run(args);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.refine', async () => {
         const notes = await vscode.window.showInputBox({
             prompt: 'Refine — what needs to change?',
@@ -104,8 +106,7 @@ function activate(context) {
             return;
         const args = notes ? ['refine', notes] : ['refine'];
         await runner.run(args);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.reject', async () => {
         const reason = await vscode.window.showInputBox({
             prompt: 'Reject — why is this the wrong direction?',
@@ -115,16 +116,13 @@ function activate(context) {
             return;
         const args = reason ? ['reject', reason] : ['reject'];
         await runner.run(args);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.ship', async () => {
         const wi = watcher.currentWorkItem;
         if (wi?.ship_ready) {
-            // Delivery — no notes needed
             await runner.run(['ship']);
         }
         else {
-            // Verdict — notes optional
             const notes = await vscode.window.showInputBox({
                 prompt: 'Ship — what makes this production-ready?',
                 placeHolder: 'all tests pass, reviewed',
@@ -134,12 +132,10 @@ function activate(context) {
             const args = notes ? ['ship', notes] : ['ship'];
             await runner.run(args);
         }
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.sync', async () => {
         await runner.run(['sync']);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
     }), cmd('babelgit.pause', async () => {
         const notes = await vscode.window.showInputBox({
             prompt: 'Pause — notes for the next person',
@@ -149,11 +145,15 @@ function activate(context) {
             return;
         const args = notes ? ['pause', notes] : ['pause'];
         await runner.run(args);
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
+    }), cmd('babelgit.continueItem', async (...args) => {
+        const id = args[0];
+        if (!id)
+            return;
+        await runner.run(['continue', id]);
+        refreshAll();
     }), cmd('babelgit.state', () => {
-        watcher.refresh();
-        sidebar.refresh();
+        refreshAll();
         return Promise.resolve();
     }), cmd('babelgit.history', async () => {
         historyPanel_1.HistoryPanel.show(watcher);
