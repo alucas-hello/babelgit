@@ -308,6 +308,14 @@ integrations:
 
 ## MCP Server (for AI agents)
 
+**Claude Code:**
+
+```bash
+claude mcp add babelgit --transport stdio -- babel mcp
+```
+
+**Other MCP clients** — add to your MCP config:
+
 ```json
 {
   "mcpServers": {
