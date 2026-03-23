@@ -18,6 +18,7 @@ export interface WorkItemState {
   stage: string
   ship_ready?: boolean
   created_at: string
+  paused_notes?: string
 }
 
 export interface CheckpointState {
@@ -32,6 +33,13 @@ export interface CheckpointState {
 export interface BabelState {
   current_work_item_id: string | null
   work_items: Record<string, WorkItemState>
+}
+
+export interface WatchEvent {
+  type: 'revert' | 'ci_failure' | 'external_commit' | 'started' | 'stopped' | 'error'
+  message: string
+  file?: string
+  timestamp: string
 }
 
 export interface CheckpointGroup {
@@ -190,6 +198,27 @@ export class StateWatcher {
     const id = this._currentState?.current_work_item_id
     if (!id || !this.workspaceRoot) return null
     return path.join(this.workspaceRoot, '.babel', 'notes', `${id}.md`)
+  }
+
+  get watchStatus(): { running: boolean; pid?: number; startedAt?: string; lastCheck?: string; alerts?: WatchEvent[] } | null {
+    if (!this.workspaceRoot) return null
+    try {
+      const pidFile = path.join(this.workspaceRoot, '.babel', 'watch.pid')
+      const statusFile = path.join(this.workspaceRoot, '.babel', 'watch-status.json')
+      const running = fs.existsSync(pidFile)
+      if (!running) return { running: false }
+      const status = fs.existsSync(statusFile) ? JSON.parse(fs.readFileSync(statusFile, 'utf8')) : {}
+      return { running: true, pid: status.pid, startedAt: status.started_at, lastCheck: status.last_check, alerts: status.alerts ?? [] }
+    } catch { return null }
+  }
+
+  get watchEvents(): WatchEvent[] {
+    if (!this.workspaceRoot) return []
+    try {
+      const eventsFile = path.join(this.workspaceRoot, '.babel', 'watch-events.json')
+      if (!fs.existsSync(eventsFile)) return []
+      return JSON.parse(fs.readFileSync(eventsFile, 'utf8')) as WatchEvent[]
+    } catch { return [] }
   }
 
   get state(): BabelState | null {

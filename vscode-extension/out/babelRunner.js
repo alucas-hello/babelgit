@@ -82,6 +82,27 @@ class BabelRunner {
             });
         });
     }
+    runStreaming(args, onData, cwd) {
+        return new Promise((resolve, reject) => {
+            const workspacePath = cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+            if (!workspacePath) {
+                reject(new Error('No workspace folder open'));
+                return;
+            }
+            const proc = (0, child_process_1.spawn)('babel', args, {
+                cwd: workspacePath,
+                env: { ...process.env, BABEL_ACTIVE: '1' },
+                shell: false,
+            });
+            proc.stdout.on('data', (data) => onData(data.toString()));
+            proc.stderr.on('data', (data) => onData(data.toString()));
+            proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`babel ${args[0]} exited with code ${code}`)));
+            proc.on('error', (err) => reject(err));
+        });
+    }
+    getWorkspacePath() {
+        return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    }
 }
 exports.BabelRunner = BabelRunner;
 //# sourceMappingURL=babelRunner.js.map

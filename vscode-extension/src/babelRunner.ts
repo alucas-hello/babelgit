@@ -55,4 +55,26 @@ export class BabelRunner {
       })
     })
   }
+
+  runStreaming(args: string[], onData: (chunk: string) => void, cwd?: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const workspacePath = cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+      if (!workspacePath) { reject(new Error('No workspace folder open')); return }
+
+      const proc = spawn('babel', args, {
+        cwd: workspacePath,
+        env: { ...process.env, BABEL_ACTIVE: '1' },
+        shell: false,
+      })
+
+      proc.stdout.on('data', (data: Buffer) => onData(data.toString()))
+      proc.stderr.on('data', (data: Buffer) => onData(data.toString()))
+      proc.on('close', (code) => code === 0 ? resolve() : reject(new Error(`babel ${args[0]} exited with code ${code}`)))
+      proc.on('error', (err) => reject(err))
+    })
+  }
+
+  getWorkspacePath(): string | undefined {
+    return vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+  }
 }

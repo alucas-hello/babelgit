@@ -65,6 +65,14 @@
       {
         "command": "babelgit.openNotes",
         "title": "Babel: Open Work Notes"
+      },
+      {
+        "command": "babelgit.watchStart",
+        "title": "Babel: Start Watcher"
+      },
+      {
+        "command": "babelgit.watchStop",
+        "title": "Babel: Stop Watcher"
       }
     ],
     "viewsContainers": {
@@ -91,8 +99,8 @@
           "name": "Quick Actions"
         },
         {
-          "id": "babelgitPaused",
-          "name": "Paused Work"
+          "id": "babelgitWatcher",
+          "name": "Watcher"
         }
       ]
     },
