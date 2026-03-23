@@ -2,7 +2,7 @@ import * as vscode from 'vscode'
 import { StateWatcher } from './stateWatcher'
 import { BabelRunner } from './babelRunner'
 import { StatusBarManager } from './statusBar'
-import { ActiveWorkProvider, CheckpointsProvider, PausedWorkProvider, ActionsProvider } from './sidebarProvider'
+import { ActiveWorkProvider, HistoryProvider, PausedWorkProvider, ActionsProvider } from './sidebarProvider'
 import { HistoryPanel } from './historyPanel'
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -11,12 +11,12 @@ export function activate(context: vscode.ExtensionContext): void {
   const runner = new BabelRunner(outputChannel)
   const statusBar = new StatusBarManager(watcher)
   const activeProvider = new ActiveWorkProvider(watcher)
-  const checkpointsProvider = new CheckpointsProvider(watcher)
+  const checkpointsProvider = new HistoryProvider(watcher)
   const pausedProvider = new PausedWorkProvider(watcher)
   const actionsProvider = new ActionsProvider(watcher)
 
   vscode.window.createTreeView('babelgitActive', { treeDataProvider: activeProvider })
-  vscode.window.createTreeView('babelgitCheckpoints', { treeDataProvider: checkpointsProvider })
+  vscode.window.createTreeView('babelgitHistory', { treeDataProvider: checkpointsProvider })
   vscode.window.createTreeView('babelgitPaused', { treeDataProvider: pausedProvider })
   vscode.window.createTreeView('babelgitActions', { treeDataProvider: actionsProvider })
 
@@ -143,6 +143,14 @@ export function activate(context: vscode.ExtensionContext): void {
 
     cmd('babelgit.history', async () => {
       HistoryPanel.show(watcher)
+    }),
+
+    cmd('babelgit.openNotes', async (...args: unknown[]) => {
+      const filePath = args[0] as string | undefined
+      if (!filePath) return
+      const uri = vscode.Uri.file(filePath)
+      const doc = await vscode.workspace.openTextDocument(uri)
+      await vscode.window.showTextDocument(doc)
     })
   )
 }

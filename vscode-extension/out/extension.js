@@ -47,11 +47,11 @@ function activate(context) {
     const runner = new babelRunner_1.BabelRunner(outputChannel);
     const statusBar = new statusBar_1.StatusBarManager(watcher);
     const activeProvider = new sidebarProvider_1.ActiveWorkProvider(watcher);
-    const checkpointsProvider = new sidebarProvider_1.CheckpointsProvider(watcher);
+    const checkpointsProvider = new sidebarProvider_1.HistoryProvider(watcher);
     const pausedProvider = new sidebarProvider_1.PausedWorkProvider(watcher);
     const actionsProvider = new sidebarProvider_1.ActionsProvider(watcher);
     vscode.window.createTreeView('babelgitActive', { treeDataProvider: activeProvider });
-    vscode.window.createTreeView('babelgitCheckpoints', { treeDataProvider: checkpointsProvider });
+    vscode.window.createTreeView('babelgitHistory', { treeDataProvider: checkpointsProvider });
     vscode.window.createTreeView('babelgitPaused', { treeDataProvider: pausedProvider });
     vscode.window.createTreeView('babelgitActions', { treeDataProvider: actionsProvider });
     const refreshAll = () => {
@@ -157,6 +157,13 @@ function activate(context) {
         return Promise.resolve();
     }), cmd('babelgit.history', async () => {
         historyPanel_1.HistoryPanel.show(watcher);
+    }), cmd('babelgit.openNotes', async (...args) => {
+        const filePath = args[0];
+        if (!filePath)
+            return;
+        const uri = vscode.Uri.file(filePath);
+        const doc = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(doc);
     }));
 }
 function deactivate() {

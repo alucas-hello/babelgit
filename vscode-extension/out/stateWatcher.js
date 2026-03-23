@@ -37,12 +37,15 @@ exports.StateWatcher = void 0;
 const vscode = __importStar(require("vscode"));
 const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
+const child_process_1 = require("child_process");
 class StateWatcher {
     _onDidChange = new vscode.EventEmitter();
     onDidChange = this._onDidChange.event;
     watcher;
     _currentState = null;
     _checkpoints = [];
+    _allCheckpointGroups = [];
+    _gitStats = null;
     workspaceRoot;
     constructor() {
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -78,12 +81,45 @@ class StateWatcher {
         catch {
             this._currentState = null;
         }
-        this._checkpoints = this.loadCheckpoints();
+        this._allCheckpointGroups = this.loadAllCheckpoints();
+        const currentId = this._currentState?.current_work_item_id;
+        this._checkpoints = currentId
+            ? (this._allCheckpointGroups.find(g => g.workItemId === currentId)?.checkpoints ?? [])
+            : [];
+        this._gitStats = this.loadGitStats();
     }
-    loadCheckpoints() {
-        if (!this.workspaceRoot || !this._currentState?.current_work_item_id)
+    loadGitStats() {
+        if (!this.workspaceRoot)
+            return null;
+        try {
+            const opts = { cwd: this.workspaceRoot };
+            // Uncommitted changes
+            const shortstat = (0, child_process_1.execSync)('git diff --shortstat HEAD 2>/dev/null || echo ""', opts).toString().trim();
+            let filesChanged = 0, insertions = 0, deletions = 0;
+            if (shortstat) {
+                filesChanged = parseInt(shortstat.match(/(\d+) file/)?.[1] ?? '0');
+                insertions = parseInt(shortstat.match(/(\d+) insertion/)?.[1] ?? '0');
+                deletions = parseInt(shortstat.match(/(\d+) deletion/)?.[1] ?? '0');
+            }
+            // Commits since last checkpoint
+            const lastCheckpoint = this._checkpoints[this._checkpoints.length - 1];
+            let commitsSinceCheckpoint = 0;
+            let minutesSinceCheckpoint = null;
+            if (lastCheckpoint) {
+                const count = (0, child_process_1.execSync)(`git rev-list ${lastCheckpoint.git_commit}..HEAD --count 2>/dev/null || echo "0"`, opts).toString().trim();
+                commitsSinceCheckpoint = parseInt(count) || 0;
+                minutesSinceCheckpoint = Math.floor((Date.now() - new Date(lastCheckpoint.called_at).getTime()) / 60000);
+            }
+            return { filesChanged, insertions, deletions, commitsSinceCheckpoint, minutesSinceCheckpoint };
+        }
+        catch {
+            return null;
+        }
+    }
+    loadAllCheckpoints() {
+        if (!this.workspaceRoot)
             return [];
-        const checkpointsDir = path.join(this.workspaceRoot, '.babel', 'checkpoints', this._currentState.current_work_item_id);
+        const checkpointsDir = path.join(this.workspaceRoot, '.babel', 'checkpoints');
         if (!fs.existsSync(checkpointsDir))
             return [];
         try {
@@ -91,15 +127,19 @@ class StateWatcher {
             return files
                 .map(f => {
                 try {
+                    const workItemId = f.replace(/\.json$/, '');
                     const raw = fs.readFileSync(path.join(checkpointsDir, f), 'utf8');
-                    return JSON.parse(raw);
+                    const checkpoints = JSON.parse(raw)
+                        .sort((a, b) => a.called_at.localeCompare(b.called_at));
+                    const description = this._currentState?.work_items[workItemId]?.description ?? '';
+                    return { workItemId, description, checkpoints };
                 }
                 catch {
                     return null;
                 }
             })
-                .filter((c) => c !== null)
-                .sort((a, b) => a.called_at.localeCompare(b.called_at));
+                .filter((g) => g !== null)
+                .sort((a, b) => b.workItemId.localeCompare(a.workItemId)); // newest first
         }
         catch {
             return [];
@@ -112,6 +152,29 @@ class StateWatcher {
     }
     get checkpoints() {
         return this._checkpoints;
+    }
+    get allCheckpointGroups() {
+        return this._allCheckpointGroups;
+    }
+    get gitStats() {
+        return this._gitStats;
+    }
+    get workNotes() {
+        if (!this.workspaceRoot)
+            return null;
+        const p = this.workNotesPath;
+        try {
+            return p && fs.existsSync(p) ? fs.readFileSync(p, 'utf8').trim() : null;
+        }
+        catch {
+            return null;
+        }
+    }
+    get workNotesPath() {
+        const id = this._currentState?.current_work_item_id;
+        if (!id || !this.workspaceRoot)
+            return null;
+        return path.join(this.workspaceRoot, '.babel', 'notes', `${id}.md`);
     }
     get state() {
         return this._currentState;

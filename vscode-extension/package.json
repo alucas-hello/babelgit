@@ -61,6 +61,10 @@
       {
         "command": "babelgit.continueItem",
         "title": "Babel: Continue"
+      },
+      {
+        "command": "babelgit.openNotes",
+        "title": "Babel: Open Work Notes"
       }
     ],
     "viewsContainers": {
@@ -79,16 +83,16 @@
           "name": "Active Work"
         },
         {
-          "id": "babelgitCheckpoints",
-          "name": "Checkpoints"
-        },
-        {
-          "id": "babelgitPaused",
-          "name": "Paused Work"
+          "id": "babelgitHistory",
+          "name": "History"
         },
         {
           "id": "babelgitActions",
           "name": "Quick Actions"
+        },
+        {
+          "id": "babelgitPaused",
+          "name": "Paused Work"
         }
       ]
     },
