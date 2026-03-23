@@ -4,6 +4,7 @@ import inquirer from 'inquirer'
 import { isGitRepo, getDefaultBranch } from '../../core/git.js'
 import { configExists, writeConfig } from '../../core/config.js'
 import { ensureBabelDir, saveState } from '../../core/state.js'
+import { installHooks } from '../../core/enforce.js'
 import { error, success, hint, info } from '../display.js'
 import type { BabelConfig } from '../../types.js'
 
@@ -226,6 +227,9 @@ export async function runInit(repoPath: string = process.cwd()): Promise<void> {
   await saveState({ work_items: {}, next_local_id: 1 }, repoPath)
   await updateGitignore(repoPath)
 
+  // Install enforcement hooks by default
+  const { installed: hooksInstalled, skipped: hooksSkipped } = await installHooks(repoPath)
+
   console.log()
   success('babelgit initialized!')
   console.log()
@@ -234,6 +238,16 @@ export async function runInit(repoPath: string = process.cwd()): Promise<void> {
   console.log('  Created:')
   console.log('    babel.config.yml   ← commit this to share with your team')
   console.log('    .babel/            ← local state (gitignored)')
+
+  if (hooksInstalled.length > 0) {
+    console.log(`    .git/hooks/        ← enforcement hooks installed (${hooksInstalled.join(', ')})`)
+  }
+  if (hooksSkipped.length > 0) {
+    console.log()
+    info(`Enforcement hooks skipped for ${hooksSkipped.join(', ')} — existing hooks found.`)
+    info("Run 'babel enforce' to manage hooks manually.")
+  }
+
   console.log()
   console.log('  Next step:')
   hint("babel start \"describe what you're working on\"")

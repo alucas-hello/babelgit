@@ -1,3 +1,7 @@
+// Mark all git operations from this process as babel-initiated.
+// Git hooks installed by `babel enforce` check for this variable.
+process.env.BABEL_ACTIVE = '1'
+
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import {
