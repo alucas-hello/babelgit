@@ -82,7 +82,8 @@ export async function runState(
 
   let suggestedNext = 'babel run'
   if (workItem.stage === 'in_progress') {
-    if (uncommittedFiles > 0) suggestedNext = 'babel save "notes"'
+    if (workItem.ship_ready) suggestedNext = 'babel ship'
+    else if (uncommittedFiles > 0) suggestedNext = 'babel save "notes"'
     else if (commitsAhead > 0) suggestedNext = 'babel run'
     else suggestedNext = 'babel save "notes"'
   } else if (workItem.stage === 'run_session_open') {
@@ -123,6 +124,7 @@ export async function runState(
     workItemId: workItem.id,
     description: workItem.description,
     stage: workItem.stage,
+    shipReady: workItem.ship_ready,
     branch: workItem.branch,
     uncommittedFiles,
     commitsAhead,
