@@ -13,7 +13,9 @@ import {
 import { detectCallerType } from '../../core/governance.js'
 import { timeAgoLabel } from '../../core/workitem.js'
 import { error, showCheckpointCreated, success, hint } from '../display.js'
-import type { Verdict } from '../../types.js'
+import { formatAutomationSummary } from '../../core/scripts.js'
+import type { Verdict, AutomationResult } from '../../types.js'
+import chalk from 'chalk'
 
 export async function runVerdict(verdict: Verdict, notes?: string, repoPath: string = process.cwd()): Promise<void> {
   await loadConfig(repoPath).catch(err => {
@@ -30,20 +32,14 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
     process.exit(1)
   }
 
-  // Check for open run session
   const session = await loadRunSession(repoPath)
   if (!session || session.status !== 'open') {
-    error(
-      "No active run session.",
-      undefined,
-      "Run 'babel run' first to open a review session."
-    )
+    error("No active run session.", undefined, "Run 'babel run' first to open a review session.")
     process.exit(1)
   }
 
   const caller = detectCallerType()
 
-  // Agents require notes
   if (caller === 'agent' && !notes) {
     error(
       'Agents must provide notes when calling a verdict.',
@@ -51,6 +47,14 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
       `Call with notes: babel_attest("${verdict}", "what you verified")`
     )
     process.exit(1)
+  }
+
+  // Show automation summary if run_commands were used
+  if (session.automation_results && session.automation_results.length > 0) {
+    const summary = formatAutomationSummary(session.automation_results as any)
+    if (summary) {
+      console.log(`\n  Automation: ${summary}`)
+    }
   }
 
   // Check if code changed since session opened
@@ -81,6 +85,7 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
   const statusOutput = await getStatusPorcelain(repoPath)
   const filesystemHash = computeFilesystemHash(statusOutput)
   const userEmail = await getUserEmail(repoPath)
+  const automationResults = (session.automation_results || []) as AutomationResult[]
 
   // Handle reject: revert to last keep
   if (verdict === 'reject') {
@@ -106,6 +111,7 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
       gitCommit: revertTo,
       gitBranch: workItem.branch,
       filesystemHash,
+      automationResults,
       repoPath,
     })
 
@@ -114,6 +120,9 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
     workItem.stage = 'in_progress'
     workItem.last_checkpoint = checkpoint
     await saveWorkItem(workItem, repoPath)
+
+    // Post to integrations
+    await postCheckpointToIntegrations(workItem, checkpoint, repoPath)
 
     console.log()
     success(`Rejected and reverted to: ${revertTo.slice(0, 7)}`)
@@ -132,12 +141,13 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
     gitCommit: currentCommit,
     gitBranch: workItem.branch,
     filesystemHash,
+    automationResults,
+    refineNotes: verdict === 'refine' ? notes : undefined,
     repoPath,
   })
 
   await deleteRunSession(repoPath)
 
-  // Update work item
   if (verdict === 'ship') {
     workItem.stage = 'in_progress'
     workItem.ship_ready = true
@@ -147,8 +157,8 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
   workItem.last_checkpoint = checkpoint
   await saveWorkItem(workItem, repoPath)
 
-  const checkpoints = await loadCheckpoints(workItem.id, repoPath)
-  const seq = checkpoints.filter(c => c.verdict === verdict).length
+  // Post to integrations
+  await postCheckpointToIntegrations(workItem, checkpoint, repoPath)
 
   showCheckpointCreated({
     verdict,
@@ -165,10 +175,26 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
     hint(`Continue working: babel save "notes" → babel run`)
     hint(`Ready to ship? babel ship`)
   } else if (verdict === 'refine') {
+    if (notes) console.log(`  ${chalk.yellow('Refinement needed:')} ${notes}`)
     hint(`Fix what needs fixing: babel save "notes" → babel run`)
   } else if (verdict === 'ship') {
     hint(`Ship it: babel ship`)
   }
 
   console.log()
+}
+
+async function postCheckpointToIntegrations(
+  workItem: import('../../types.js').WorkItem,
+  checkpoint: import('../../types.js').Checkpoint,
+  repoPath: string
+): Promise<void> {
+  try {
+    const config = await loadConfig(repoPath)
+    const { IntegrationManager } = await import('../../integrations/index.js')
+    const mgr = new IntegrationManager(config, repoPath)
+    await mgr.onCheckpoint(workItem, checkpoint)
+  } catch {
+    // Integration errors are non-fatal
+  }
 }

@@ -133,6 +133,23 @@ export async function startMcpServer(): Promise<void> {
           },
         },
       },
+      {
+        name: 'babel_config',
+        description: 'Get the effective babelgit configuration, including permitted operations and integration status.',
+        inputSchema: { type: 'object', properties: {} },
+      },
+      {
+        name: 'babel_create_work_item',
+        description: 'Create a new work item with a specific ID (for use when ID is already known, e.g. from an external tracker).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', description: 'Work item ID (e.g., ENG-042)' },
+            description: { type: 'string', description: 'Description of the work' },
+          },
+          required: ['id', 'description'],
+        },
+      },
     ]
     return { tools }
   })
@@ -178,6 +195,16 @@ export async function startMcpServer(): Promise<void> {
           break
         case 'babel_history':
           await runHistory(a.work_item_id as string | undefined, { json: true })
+          break
+        case 'babel_config': {
+          const { loadConfig } = await import('../core/config.js')
+          const cfg = await loadConfig()
+          console.log(JSON.stringify(cfg, null, 2))
+          break
+        }
+        case 'babel_create_work_item':
+          // babel_start with an explicit ID: pass "ID description" so start parses both
+          await runStart(a.id as string)
           break
         default:
           throw new Error(`Unknown tool: ${name}`)

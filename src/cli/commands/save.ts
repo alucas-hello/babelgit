@@ -1,6 +1,9 @@
 import { loadConfig } from '../../core/config.js'
 import { getCurrentWorkItem, saveWorkItem } from '../../core/state.js'
 import { addAll, commit, hasUncommittedChanges, getCurrentCommitSha, getShortSha } from '../../core/git.js'
+import { runHooks, hooksFailed } from '../../core/hooks.js'
+import { evaluateRules, formatViolations } from '../../core/rules.js'
+import { detectCallerType } from '../../core/governance.js'
 import { error, success, hint } from '../display.js'
 
 export async function runSave(notes?: string, repoPath: string = process.cwd()): Promise<void> {
@@ -38,6 +41,36 @@ export async function runSave(notes?: string, repoPath: string = process.cwd()):
     process.exit(0)
   }
 
+  // Load config for hooks + rules
+  const config = await loadConfig(repoPath).catch(() => null)
+
+  if (config) {
+    // Evaluate rules for 'save'
+    const caller = detectCallerType()
+    const message_preview = notes ? `save(${workItem.id}): ${notes}` : ''
+    const violations = await evaluateRules({
+      operation: 'save',
+      caller,
+      config,
+      repoPath,
+      commitMessage: message_preview,
+    })
+    const blocking = violations.filter(v => v.blocking)
+    if (blocking.length > 0) {
+      console.log()
+      console.error(`\n✗ Save blocked by rules:\n\n${formatViolations(blocking)}\n`)
+      process.exit(1)
+    }
+
+    // before_save hooks
+    const hookResults = await runHooks('before_save', config, repoPath)
+    const fail = hooksFailed(hookResults)
+    if (fail) {
+      error(`before_save hook failed: ${fail.name}`, fail.stderr || fail.stdout)
+      process.exit(1)
+    }
+  }
+
   const message = notes
     ? `save(${workItem.id}): ${notes}`
     : `save(${workItem.id}): ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`
@@ -45,6 +78,9 @@ export async function runSave(notes?: string, repoPath: string = process.cwd()):
   await addAll(repoPath)
   const sha = await commit(message, repoPath)
   const shortSha = sha ? sha.slice(0, 7) : await getShortSha('HEAD', repoPath)
+
+  // after_save hooks (non-blocking)
+  if (config) await runHooks('after_save', config, repoPath)
 
   console.log()
   success(`Saved: ${shortSha}`)

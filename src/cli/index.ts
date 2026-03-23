@@ -12,6 +12,8 @@ import { runVerdict } from './commands/verdict.js'
 import { runState } from './commands/state.js'
 import { runHistory } from './commands/history.js'
 import { runShip } from './commands/ship.js'
+import { runConfigShow, runConfigValidate } from './commands/config.js'
+import { runDoctor } from './commands/doctor.js'
 
 const program = new Command()
 
@@ -127,6 +129,29 @@ program
   .option('--json', 'Output as JSON')
   .action(async (workItemId?: string, opts?: { json?: boolean }) => {
     await runHistory(workItemId, opts || {})
+  })
+
+const configCmd = program.command('config').description('Configuration commands')
+
+configCmd
+  .command('show')
+  .description('Show the effective configuration with all defaults applied')
+  .action(async () => {
+    await runConfigShow()
+  })
+
+configCmd
+  .command('validate')
+  .description('Validate babel.config.yml against the schema')
+  .action(async () => {
+    await runConfigValidate()
+  })
+
+program
+  .command('doctor')
+  .description('Check that your environment is set up correctly')
+  .action(async () => {
+    await runDoctor()
   })
 
 program

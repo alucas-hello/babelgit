@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'fs/promises'
 import crypto from 'crypto'
 import path from 'path'
-import type { Checkpoint, RunSession, Verdict, CallerType } from '../types.js'
+import type { Checkpoint, RunSession, Verdict, CallerType, AutomationResult } from '../types.js'
 import { ensureBabelDir, getCheckpointPath, getRunSessionPath } from './state.js'
 
 export function computeFilesystemHash(statusPorcelain: string): string {
@@ -42,6 +42,8 @@ export async function createCheckpoint(params: {
   gitCommit: string
   gitBranch: string
   filesystemHash: string
+  automationResults?: AutomationResult[]
+  refineNotes?: string
   repoPath?: string
 }): Promise<Checkpoint> {
   const existing = await loadCheckpoints(params.workItemId, params.repoPath)
@@ -50,7 +52,6 @@ export async function createCheckpoint(params: {
 
   const isAnchor = params.verdict === 'keep' || params.verdict === 'ship'
 
-  // Find previous keep for reference
   const previousKeep = isAnchor
     ? existing.filter(c => c.is_recovery_anchor).pop()?.id
     : undefined
@@ -68,6 +69,8 @@ export async function createCheckpoint(params: {
     filesystem_hash: params.filesystemHash,
     is_recovery_anchor: isAnchor,
     previous_keep: previousKeep,
+    ...(params.automationResults?.length ? { automation_results: params.automationResults } : {}),
+    ...(params.refineNotes ? { refine_notes: params.refineNotes } : {}),
   }
 
   await appendCheckpoint(checkpoint, params.repoPath)

@@ -61,6 +61,15 @@ export async function runPause(notes?: string, repoPath: string = process.cwd())
   await saveWorkItem(workItem, repoPath)
   await setCurrentWorkItem(undefined, repoPath)
 
+  // Integration callbacks (non-fatal)
+  try {
+    const { IntegrationManager } = await import('../../integrations/index.js')
+    const mgr = new IntegrationManager(config, repoPath)
+    await mgr.onPause(workItem, notes)
+  } catch {
+    // Non-fatal
+  }
+
   console.log()
   success(`Work paused: ${workItem.id}`)
   console.log()

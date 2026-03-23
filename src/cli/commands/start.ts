@@ -106,7 +106,7 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
 
   // Create work item
   const now = new Date().toISOString()
-  const workItem: WorkItem = {
+  let workItem: WorkItem = {
     id,
     description,
     branch: branchName,
@@ -117,6 +117,15 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
 
   await saveWorkItem(workItem, repoPath)
   await setCurrentWorkItem(id, repoPath)
+
+  // Integration callbacks (non-fatal)
+  try {
+    const { IntegrationManager } = await import('../../integrations/index.js')
+    const mgr = new IntegrationManager(config, repoPath)
+    workItem = await mgr.onStart(workItem)
+  } catch {
+    // Non-fatal
+  }
 
   console.log()
   success(`Work item started: ${id}`)

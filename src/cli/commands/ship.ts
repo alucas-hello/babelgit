@@ -11,8 +11,8 @@ import {
   deleteRemoteBranch,
   remoteExists,
 } from '../../core/git.js'
-import { checkShipRequirement } from '../../core/governance.js'
-import { detectCallerType } from '../../core/governance.js'
+import { checkShipRequirement, detectCallerType } from '../../core/governance.js'
+import { runHooks, hooksFailed } from '../../core/hooks.js'
 import { error, success, hint } from '../display.js'
 
 export async function runShip(repoPath: string = process.cwd()): Promise<void> {
@@ -70,6 +70,22 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
     }
   }
 
+  // before_ship hooks
+  const beforeHooks = await runHooks('before_ship', config, repoPath)
+  const hookFail = hooksFailed(beforeHooks)
+  if (hookFail) {
+    error(`before_ship hook failed: ${hookFail.name}`, hookFail.stderr || hookFail.stdout)
+    process.exit(1)
+  }
+
+  // GitHub PR path (if configured)
+  if (config.integrations?.github?.enabled && config.integrations.github.ship_via_pr) {
+    const { IntegrationManager } = await import('../../integrations/index.js')
+    const mgr = new IntegrationManager(config, repoPath)
+    await mgr.onShip(workItem)
+    return
+  }
+
   const workBranch = workItem.branch
 
   try {
@@ -119,6 +135,18 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
   workItem.stage = 'shipped'
   await saveWorkItem(workItem, repoPath)
   await setCurrentWorkItem(undefined, repoPath)
+
+  // after_ship hooks (non-blocking)
+  await runHooks('after_ship', config, repoPath).catch(() => {})
+
+  // Integration callbacks
+  try {
+    const { IntegrationManager } = await import('../../integrations/index.js')
+    const mgr = new IntegrationManager(config, repoPath)
+    await mgr.onShip(workItem)
+  } catch {
+    // Non-fatal
+  }
 
   console.log()
   success(`Shipped: ${workItem.id} — "${workItem.description}"`)
