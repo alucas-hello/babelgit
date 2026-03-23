@@ -247,15 +247,35 @@ export function showHistory(
 
 // ─── No active work item ──────────────────────────────────────────────────────
 
-export function showNoWorkItem(): void {
+export function showNoWorkItem(
+  paused: Array<{ id: string; description: string; branch: string }> = []
+): void {
   console.log('\n' + divider())
   console.log(`  ${chalk.bold('No active work item')}`)
   console.log(divider())
   console.log()
-  console.log(`  Start a new work item with: ${chalk.bold('babel start "description"')}`)
-  console.log(`  Continue paused work with: ${chalk.bold('babel continue')}`)
-  console.log()
+
+  if (paused.length > 0) {
+    console.log(`  ${chalk.bold('Paused work items:')}`)
+    console.log()
+    for (const wi of paused) {
+      console.log(`    ${chalk.cyan(wi.id)}  ${wi.description}`)
+      console.log(`    ${chalk.dim(`branch: ${wi.branch}`)}`)
+      console.log(`    ${chalk.dim(`→ babel continue ${wi.id}`)}`)
+      console.log()
+    }
+  } else {
+    console.log(`  Start a new work item with: ${chalk.bold('babel start "description"')}`)
+    console.log()
+  }
+
   console.log(divider() + '\n')
+}
+
+export function showPausedWorkItems(
+  paused: Array<{ id: string; description: string; branch: string }>
+): void {
+  showNoWorkItem(paused)
 }
 
 // ─── Checkpoint created ───────────────────────────────────────────────────────
