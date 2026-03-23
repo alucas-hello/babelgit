@@ -1,6 +1,15 @@
 import * as vscode from 'vscode'
 import * as fs from 'fs'
 import * as path from 'path'
+import { execSync } from 'child_process'
+
+export interface GitStats {
+  filesChanged: number
+  insertions: number
+  deletions: number
+  commitsSinceCheckpoint: number
+  minutesSinceCheckpoint: number | null
+}
 
 export interface WorkItemState {
   id: string
@@ -25,6 +34,12 @@ export interface BabelState {
   work_items: Record<string, WorkItemState>
 }
 
+export interface CheckpointGroup {
+  workItemId: string
+  description: string
+  checkpoints: CheckpointState[]
+}
+
 export class StateWatcher {
   private _onDidChange = new vscode.EventEmitter<void>()
   readonly onDidChange = this._onDidChange.event
@@ -32,6 +47,8 @@ export class StateWatcher {
   private watcher: vscode.FileSystemWatcher | undefined
   private _currentState: BabelState | null = null
   private _checkpoints: CheckpointState[] = []
+  private _allCheckpointGroups: CheckpointGroup[] = []
+  private _gitStats: GitStats | null = null
   private workspaceRoot: string | undefined
 
   constructor() {
@@ -72,19 +89,52 @@ export class StateWatcher {
       this._currentState = null
     }
 
-    this._checkpoints = this.loadCheckpoints()
+    this._allCheckpointGroups = this.loadAllCheckpoints()
+    const currentId = this._currentState?.current_work_item_id
+    this._checkpoints = currentId
+      ? (this._allCheckpointGroups.find(g => g.workItemId === currentId)?.checkpoints ?? [])
+      : []
+    this._gitStats = this.loadGitStats()
   }
 
-  private loadCheckpoints(): CheckpointState[] {
-    if (!this.workspaceRoot || !this._currentState?.current_work_item_id) return []
+  private loadGitStats(): GitStats | null {
+    if (!this.workspaceRoot) return null
+    try {
+      const opts = { cwd: this.workspaceRoot }
 
-    const checkpointsDir = path.join(
-      this.workspaceRoot,
-      '.babel',
-      'checkpoints',
-      this._currentState.current_work_item_id
-    )
+      // Uncommitted changes
+      const shortstat = execSync('git diff --shortstat HEAD 2>/dev/null || echo ""', opts).toString().trim()
+      let filesChanged = 0, insertions = 0, deletions = 0
+      if (shortstat) {
+        filesChanged = parseInt(shortstat.match(/(\d+) file/)?.[1] ?? '0')
+        insertions  = parseInt(shortstat.match(/(\d+) insertion/)?.[1] ?? '0')
+        deletions   = parseInt(shortstat.match(/(\d+) deletion/)?.[1] ?? '0')
+      }
 
+      // Commits since last checkpoint
+      const lastCheckpoint = this._checkpoints[this._checkpoints.length - 1]
+      let commitsSinceCheckpoint = 0
+      let minutesSinceCheckpoint: number | null = null
+      if (lastCheckpoint) {
+        const count = execSync(
+          `git rev-list ${lastCheckpoint.git_commit}..HEAD --count 2>/dev/null || echo "0"`, opts
+        ).toString().trim()
+        commitsSinceCheckpoint = parseInt(count) || 0
+        minutesSinceCheckpoint = Math.floor(
+          (Date.now() - new Date(lastCheckpoint.called_at).getTime()) / 60000
+        )
+      }
+
+      return { filesChanged, insertions, deletions, commitsSinceCheckpoint, minutesSinceCheckpoint }
+    } catch {
+      return null
+    }
+  }
+
+  private loadAllCheckpoints(): CheckpointGroup[] {
+    if (!this.workspaceRoot) return []
+
+    const checkpointsDir = path.join(this.workspaceRoot, '.babel', 'checkpoints')
     if (!fs.existsSync(checkpointsDir)) return []
 
     try {
@@ -92,14 +142,18 @@ export class StateWatcher {
       return files
         .map(f => {
           try {
+            const workItemId = f.replace(/\.json$/, '')
             const raw = fs.readFileSync(path.join(checkpointsDir, f), 'utf8')
-            return JSON.parse(raw) as CheckpointState
+            const checkpoints = (JSON.parse(raw) as CheckpointState[])
+              .sort((a, b) => a.called_at.localeCompare(b.called_at))
+            const description = this._currentState?.work_items[workItemId]?.description ?? ''
+            return { workItemId, description, checkpoints }
           } catch {
             return null
           }
         })
-        .filter((c): c is CheckpointState => c !== null)
-        .sort((a, b) => a.called_at.localeCompare(b.called_at))
+        .filter((g): g is CheckpointGroup => g !== null)
+        .sort((a, b) => b.workItemId.localeCompare(a.workItemId)) // newest first
     } catch {
       return []
     }
@@ -112,6 +166,30 @@ export class StateWatcher {
 
   get checkpoints(): CheckpointState[] {
     return this._checkpoints
+  }
+
+  get allCheckpointGroups(): CheckpointGroup[] {
+    return this._allCheckpointGroups
+  }
+
+  get gitStats(): GitStats | null {
+    return this._gitStats
+  }
+
+  get workNotes(): string | null {
+    if (!this.workspaceRoot) return null
+    const p = this.workNotesPath
+    try {
+      return p && fs.existsSync(p) ? fs.readFileSync(p, 'utf8').trim() : null
+    } catch {
+      return null
+    }
+  }
+
+  get workNotesPath(): string | null {
+    const id = this._currentState?.current_work_item_id
+    if (!id || !this.workspaceRoot) return null
+    return path.join(this.workspaceRoot, '.babel', 'notes', `${id}.md`)
   }
 
   get state(): BabelState | null {
