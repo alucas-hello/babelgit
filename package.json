@@ -1,0 +1,47 @@
+{
+  "name": "babelgit",
+  "version": "0.1.0",
+  "description": "A CLI tool that gives developers and AI agents a shared vocabulary for the lifecycle of code contributions",
+  "type": "module",
+  "bin": {
+    "babel": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@linear/sdk": "^78.0.0",
+    "@modelcontextprotocol/sdk": "latest",
+    "@octokit/rest": "^22.0.1",
+    "@octokit/types": "^16.0.0",
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "execa": "^9.6.1",
+    "inquirer": "^9.2.0",
+    "simple-git": "^3.22.0",
+    "yaml": "^2.4.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/inquirer": "^9.0.9",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "git",
+    "cli",
+    "workflow",
+    "developer-tools",
+    "ai-agents"
+  ],
+  "license": "MIT"
+}
