@@ -19,6 +19,7 @@ import { runShip } from './commands/ship.js'
 import { runConfigShow, runConfigValidate } from './commands/config.js'
 import { runDiag } from './commands/diag.js'
 import { runEnforce } from './commands/enforce.js'
+import { runWatch } from './commands/watch.js'
 
 const program = new Command()
 
@@ -164,6 +165,13 @@ program
   .description('Manage git operation enforcement hooks (on/off/status)')
   .action(async (action?: string) => {
     await runEnforce(action)
+  })
+
+program
+  .command('watch [action]')
+  .description('Manage the file watcher daemon (start/stop/status)')
+  .action(async (action?: string) => {
+    await runWatch(action)
   })
 
 program

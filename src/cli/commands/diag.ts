@@ -4,6 +4,7 @@ import { configExists, loadConfig } from '../../core/config.js'
 import { loadRunSession } from '../../core/checkpoint.js'
 import { getCurrentWorkItem } from '../../core/state.js'
 import { getEnforceStatus } from '../../core/enforce.js'
+import { getWatchStatus } from '../../core/watch.js'
 import chalk from 'chalk'
 
 interface Check {
@@ -39,7 +40,10 @@ export async function runDiag(repoPath: string = process.cwd()): Promise<void> {
   // 7. Enforcement hooks
   checks.push(await checkEnforcement(repoPath))
 
-  // 8. Integration credentials (if configured)
+  // 8. Watch daemon
+  checks.push(checkWatchDaemon(repoPath))
+
+  // 9. Integration credentials (if configured)
   const integrationChecks = await checkIntegrations(repoPath)
   checks.push(...integrationChecks)
 
@@ -199,6 +203,19 @@ async function checkEnforcement(repoPath: string): Promise<Check> {
     passed: false,
     detail: 'not active — direct git operations are not blocked',
     fix: "Run 'babel enforce on' to enable",
+  }
+}
+
+function checkWatchDaemon(repoPath: string): Check {
+  const { running, pid } = getWatchStatus(repoPath)
+  if (running) {
+    return { name: 'watch daemon', passed: true, detail: `running (pid ${pid})` }
+  }
+  return {
+    name: 'watch daemon',
+    passed: false,
+    detail: 'not running — file edits without a work item are not blocked',
+    fix: "Run 'babel watch start' to enable",
   }
 }
 
