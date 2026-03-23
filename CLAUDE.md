@@ -35,7 +35,7 @@ docs/build/TECHNICAL-SPEC.md   ← exact specifications
 3. **Commit messages are descriptive.** Format: `type(scope): description`
    - Types: `feat`, `fix`, `docs`, `test`, `refactor`, `chore`
 4. **Do not modify the docs/strategy/ documents** without explicit instruction. They are the product strategy and are not implementation targets.
-5. **Do not expand scope beyond MVP-SPEC.md.** If you think something is missing, add it to a `NOTES.md` file for the human to review. Do not build it.
+5. **New scope goes in NOTES.md first.** If you think something is missing, add it there for the human to review before building it.
 6. **All git operations through simple-git.** No `child_process.exec('git ...')`.
 
 ---
@@ -52,12 +52,12 @@ docs/build/TECHNICAL-SPEC.md   ← exact specifications
 
 ## What Not To Do
 
-- Do not build anything in docs/build/MVP-SPEC.md's "What v0.1 Is Not Responsible For" table
-- Do not add dependencies not listed in BUILD-BRIEF.md without leaving a note
-- Do not implement `babel undo` in v0.1 (requires shared checkpoint storage — v0.2)
+- Do not add dependencies without leaving a note in NOTES.md
+- Do not implement `babel undo` (requires shared checkpoint storage — v0.3)
 - Do not call git via shell string interpolation
 - Do not print git error messages directly to users — translate them
 - Do not add a `--force` flag to anything that bypasses governance
+- Do not modify the docs/strategy/ documents without explicit instruction
 
 ---
 
@@ -100,5 +100,12 @@ babelgit/
 │       ├── 02-COMMAND-REFERENCE.md
 │       ├── 03-WORKFLOWS-HOOKS-INTERNALS.md
 │       └── 04-PATTERNS-RECIPES-AGENTS.md
-└── src/                         ← write your code here
+├── src/                         ← write your code here
+│   ├── cli/commands/            ← one file per command
+│   ├── core/                    ← git, config, state, checkpoint, governance, scripts, hooks, rules
+│   ├── integrations/            ← linear, github, index
+│   ├── mcp/                     ← MCP server
+│   └── types.ts
+├── tests/                       ← vitest unit + integration tests
+└── sandbox/                     ← manual test scripts and scratch space (not committed to prod)
 ```

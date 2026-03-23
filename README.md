@@ -90,22 +90,151 @@ The UX research distills into ten principles that guide everything we build:
 
 ---
 
+## Installation
+
+```bash
+npm install -g babelgit
+```
+
+Requires Node.js >= 18 and git >= 2.28.
+
+---
+
+## Quick Start
+
+```bash
+# In any git repository:
+babel init
+
+# Start working on something
+babel start "fix login timeout on mobile"
+
+# Save progress as you go
+babel save "auth flow working"
+
+# Open a review session — locks your snapshot
+babel run
+
+# Call a verdict when you're ready
+babel keep "tested on mobile, looks good"
+
+# Ship it
+babel ship
+```
+
+You never typed `git ___`.
+
+---
+
+## Commands
+
+| Command | What it does |
+|---------|-------------|
+| `babel init` | Set up babelgit in a repository |
+| `babel start` | Begin a new work item |
+| `babel save` | Checkpoint progress locally |
+| `babel sync` | Get current with the team |
+| `babel pause` | Leave work in handoff-ready state |
+| `babel continue` | Resume paused work |
+| `babel stop` | Abandon work entirely |
+| `babel run` | Open a review session; lock the snapshot |
+| `babel keep/refine/reject/ship` | Call a verdict; create verified checkpoint |
+| `babel state` | Show current situation |
+| `babel history` | Show work item history and checkpoints |
+| `babel ship` | Deliver work to production |
+| `babel config show/validate` | Inspect or validate your config |
+| `babel diag` | Check that your environment is set up correctly |
+
+---
+
+## Configuration
+
+`babel init` creates a `babel.config.yml` in your repo. Commit it — it's your team's working agreement.
+
+```yaml
+version: 1
+base_branch: main
+
+# Require a verified checkpoint before shipping
+require_checkpoint_for:
+  ship: true
+
+# Run scripts during babel run
+run_commands:
+  - name: tests
+    command: npm test
+    required: true
+  - name: dev-server
+    command: npm run dev
+    background: true
+
+# Lifecycle hooks
+hooks:
+  before_ship:
+    - npm run build
+
+# Enforce rules at save/pause/ship
+rules:
+  - name: conventional-commits
+    type: commit_message_pattern
+    pattern: "^(feat|fix|chore|docs|test|refactor):"
+    apply_to: [save]
+
+# Integrations
+integrations:
+  linear:
+    enabled: true
+    team_id: YOUR_TEAM_ID
+    create_issue_on_start: true
+  github:
+    enabled: true
+    create_draft_pr_on_pause: true
+```
+
+---
+
+## MCP Server (for AI agents)
+
+```json
+{
+  "mcpServers": {
+    "babelgit": {
+      "command": "babel",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Agents call `babel_state()` first, then operate within `permitted_operations`. They can never violate `babel.config.yml`.
+
+---
+
 ## Status
 
-**Phase 1 — Foundation (complete)**
+**v0.1 — Core CLI & MCP server ✅**
 - ✅ Git Bible: complete technical reference
 - ✅ UX Research: usability study and failure mode analysis
+- ✅ Architecture and vocabulary design
+- ✅ Full 12-command CLI (init through ship)
+- ✅ Governance layer — config enforcement, agent restrictions, checkpoint requirements
+- ✅ MCP server — 13 tools for AI agent use
+- ✅ 80 passing tests
 
-**Phase 2 — Strategy (in progress)**
-- [ ] Architecture decisions
-- [ ] Interface design
-- [ ] Implementation plan
+**v0.2 — Integrations, scripting, rules ✅**
+- ✅ Runtime scripting (`run_commands`, foreground and background)
+- ✅ Hooks system (8 lifecycle points)
+- ✅ Linear integration (creates issues, transitions on ship, checkpoint comments)
+- ✅ GitHub integration (draft PRs on pause, ship-via-PR, checkpoint comments)
+- ✅ Rules engine (commit message, path restriction, file change, script rules)
+- ✅ Workflow templates (solo, standard, CD, enterprise) in `babel init`
+- ✅ `babel config show/validate` and `babel diag`
 
-**Phase 3 — Build**
-- [ ] Core layer
-- [ ] Human interface
-- [ ] Agent interface
-- [ ] Test suite
+**v0.3 — Planned**
+- [ ] Shared checkpoint storage (push checkpoint records to git notes or branch)
+- [ ] `babel undo` — return to last keep checkpoint
+- [ ] Checkpoint signing (GPG/SSH)
+- [ ] Multi-repo / monorepo support
 
 ---
 

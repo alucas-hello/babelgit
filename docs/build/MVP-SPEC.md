@@ -1,8 +1,8 @@
 # babelgit MVP Specification
 ## v0.1 — What Gets Built, What Doesn't, Why
 
-**Version:** 1.0  
-**Status:** Final — this is the build target  
+**Version:** 1.0
+**Status:** ✅ Complete — v0.1 shipped. v0.2 also complete (see below).
 **Purpose:** Defines the exact scope of v0.1. Everything outside this document is v0.2 or later.
 
 ---
@@ -48,20 +48,20 @@ These twelve commands are everything v0.1 ships. No more.
 
 These are explicitly out of scope. They are not "future features to design now." They are not mentioned in the codebase. They do not appear in help text.
 
-| Not in v0.1 | Belongs in |
-|-------------|-----------|
-| Running test commands automatically | Configuration extension (v0.2) |
-| Capturing test output | Integration layer (v0.2) |
-| Playwright / CI integration | Integration layer (v0.2) |
-| JIRA / Linear ticket creation | Integration layer (v0.2) |
-| Slack / notification systems | Integration layer (v0.2) |
-| Shared checkpoint storage | Infrastructure layer (v0.2) |
-| PR creation and management | Platform layer (v0.2) |
-| Merge conflict resolution | Advanced workflows (v0.2) |
-| GUI / TUI interface | Separate product decision |
-| Multi-repo / monorepo support | Advanced configuration (v0.3) |
-| Checkpoint signing / cryptography | Trust infrastructure (v0.2) |
-| Work item creation in external systems | Integration layer (v0.2) |
+| Not in v0.1 | Belongs in | Status |
+|-------------|-----------|--------|
+| Running test commands automatically | Configuration extension (v0.2) | ✅ Built — `run_commands` in config |
+| Capturing test output | Integration layer (v0.2) | ✅ Built — results in checkpoint records |
+| Playwright / CI integration | Integration layer (v0.2) | Partially — `run_commands` supports arbitrary scripts |
+| JIRA / Linear ticket creation | Integration layer (v0.2) | ✅ Built — Linear integration |
+| Slack / notification systems | Integration layer (v0.2) | Not yet |
+| Shared checkpoint storage | Infrastructure layer (v0.2) | Not yet — v0.3 |
+| PR creation and management | Platform layer (v0.2) | ✅ Built — GitHub integration |
+| Merge conflict resolution | Advanced workflows (v0.2) | Not yet |
+| GUI / TUI interface | Separate product decision | Not yet |
+| Multi-repo / monorepo support | Advanced configuration (v0.3) | Not yet |
+| Checkpoint signing / cryptography | Trust infrastructure (v0.2) | Not yet — v0.3 |
+| Work item creation in external systems | Integration layer (v0.2) | ✅ Built — Linear creates issues on `babel start` |
 
 If a feature is not in the command table above, it is not in v0.1.
 
@@ -88,13 +88,13 @@ These three things, working together, solve the problems we set out to solve. Ev
 
 v0.1 is complete when:
 
-1. A developer can clone a repository, run `babel init`, and complete a full work item lifecycle (`start` → `save` → `run` → `keep` → `ship`) without typing `git ___`
-2. The repository produced is a valid standard git repository that works normally with raw git
-3. An AI agent using the MCP server can do the same lifecycle programmatically
-4. If an agent or human attempts an operation that violates `babel.config.yml`, the operation is blocked with a plain-language explanation
-5. `babel state` returns accurate, human-readable current situation at any point in the lifecycle
-6. `babel history` shows a human-readable narrative of a work item's checkpoint history
-7. All git commands executed are printed to stdout (translucent, not opaque)
+1. ✅ A developer can clone a repository, run `babel init`, and complete a full work item lifecycle (`start` → `save` → `run` → `keep` → `ship`) without typing `git ___`
+2. ✅ The repository produced is a valid standard git repository that works normally with raw git
+3. ✅ An AI agent using the MCP server can do the same lifecycle programmatically
+4. ✅ If an agent or human attempts an operation that violates `babel.config.yml`, the operation is blocked with a plain-language explanation
+5. ✅ `babel state` returns accurate, human-readable current situation at any point in the lifecycle
+6. ✅ `babel history` shows a human-readable narrative of a work item's checkpoint history
+7. ✅ All git commands executed are printed to stdout (translucent, not opaque)
 
 ---
 
