@@ -112,6 +112,7 @@ export function showState(params: {
   workItemId: string
   description: string
   stage: string
+  shipReady?: boolean
   branch: string
   uncommittedFiles: number
   commitsAhead: number
@@ -127,12 +128,16 @@ export function showState(params: {
     stopped: chalk.red('Stopped'),
   }
 
+  const statusLabel = params.shipReady
+    ? chalk.magenta('Ship Ready')
+    : stageLabel[params.stage] || params.stage
+
   console.log('\n' + divider())
   console.log(
     `  ${chalk.bold(params.workItemId)}  ${params.description}`
   )
   console.log(
-    `  Status: ${stageLabel[params.stage] || params.stage}  ${chalk.dim('●')}  branch: ${chalk.cyan(params.branch)}`
+    `  Status: ${statusLabel}  ${chalk.dim('●')}  branch: ${chalk.cyan(params.branch)}`
   )
   console.log(divider())
 
@@ -160,7 +165,10 @@ export function showState(params: {
   }
 
   section('Workflow')
-  console.log(`  You are here:  ${getWorkflowPosition(params.stage)}`)
+  const workflowPosition = params.shipReady
+    ? `In Progress → Run → ${chalk.bold('[Ship Ready]')}`
+    : getWorkflowPosition(params.stage)
+  console.log(`  You are here:  ${workflowPosition}`)
   console.log()
   console.log(`  Suggested next:  ${chalk.bold(params.suggestedNext)}`)
   console.log('\n' + divider() + '\n')
