@@ -1,8 +1,9 @@
 # babelgit Technical Specification
 ## Implementation Guide for v0.1
 
-**Version:** 1.0  
-**Status:** Final — implementation target  
+**Version:** 2.0
+**Status:** ✅ Complete — v0.1 and v0.2 implemented.
+
 **Language:** TypeScript / Node.js  
 **Binary name:** `babel`
 
@@ -37,7 +38,7 @@ babelgit/
 │   ├── cli/
 │   │   ├── index.ts              ← entry point, command registration
 │   │   ├── commands/
-│   │   │   ├── init.ts
+│   │   │   ├── init.ts           ← includes 4 workflow templates
 │   │   │   ├── start.ts
 │   │   │   ├── save.ts
 │   │   │   ├── sync.ts
@@ -48,20 +49,31 @@ babelgit/
 │   │   │   ├── verdict.ts        ← handles keep/refine/reject/ship
 │   │   │   ├── state.ts
 │   │   │   ├── history.ts
-│   │   │   └── ship.ts
+│   │   │   ├── ship.ts
+│   │   │   ├── config.ts         ← babel config show/validate (v0.2)
+│   │   │   └── diag.ts           ← babel diag environment check (v0.2)
 │   │   └── display.ts            ← all terminal output formatting
 │   ├── mcp/
-│   │   ├── index.ts              ← MCP server entry point
-│   │   └── tools.ts              ← MCP tool definitions
+│   │   └── index.ts              ← MCP server entry point + tool definitions
 │   ├── core/
 │   │   ├── config.ts             ← babel.config.yml read/validate
 │   │   ├── governance.ts         ← enforcement layer
 │   │   ├── git.ts                ← all git operations via simple-git
 │   │   ├── state.ts              ← .babel/ state management
 │   │   ├── checkpoint.ts         ← attestation creation and reading
-│   │   └── workitem.ts           ← work item lifecycle management
+│   │   ├── workitem.ts           ← work item lifecycle management
+│   │   ├── scripts.ts            ← run_commands execution via execa (v0.2)
+│   │   ├── hooks.ts              ← lifecycle hooks execution (v0.2)
+│   │   └── rules.ts              ← rules engine evaluation (v0.2)
+│   ├── integrations/
+│   │   ├── linear.ts             ← Linear GraphQL client (v0.2)
+│   │   ├── github.ts             ← GitHub Octokit client (v0.2)
+│   │   └── index.ts              ← IntegrationManager (v0.2)
 │   └── types.ts                  ← shared TypeScript types
 ├── tests/
+├── sandbox/                      ← manual test scripts and scratch space
+│   └── scripts/
+│       └── lifecycle-test.js     ← end-to-end lifecycle test
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -146,6 +158,76 @@ verdicts:
   refine: refine
   reject: reject  
   ship: ship
+```
+
+### v0.2 additions to `babel.config.yml`
+
+```yaml
+# Scripts executed during babel run (v0.2)
+run_commands:
+  - name: tests
+    command: npm test
+    required: true          # if true, failure blocks keep/ship verdicts
+    capture_output: true    # include stdout/stderr in checkpoint record
+  - name: dev-server
+    command: npm run dev
+    background: true        # starts in background, killed after verdict
+
+# Lifecycle hooks (v0.2)
+hooks:
+  before_save:
+    - npm run lint --fix
+  after_save: []
+  before_run: []
+  after_run: []
+  before_ship:
+    - npm run build
+  after_ship: []
+  before_pause: []
+  after_pause: []
+
+# Governance rules (v0.2)
+rules:
+  - name: conventional-commits
+    type: commit_message_pattern
+    pattern: "^(feat|fix|chore|docs|test|refactor):"
+    apply_to: [save]
+    message: "Commit must start with feat:, fix:, chore:, docs:, test:, or refactor:"
+    blocking: true
+
+  - name: no-agent-infra-changes
+    type: path_restriction
+    blocked_paths: [".github/**", "*.config.*", "package.json"]
+    caller: agent
+    apply_to: [save, ship]
+
+  - name: tests-required-with-source
+    type: files_changed
+    if_changed: "src/**/*.ts"
+    require_also_changed: "tests/**/*.test.ts"
+    apply_to: [save]
+
+  - name: custom-script-check
+    type: script
+    command: node scripts/validate.js
+    apply_to: [ship]
+
+# Integration credentials come from environment variables, not this file (v0.2)
+integrations:
+  linear:
+    enabled: true
+    team_id: "YOUR_TEAM_ID"
+    api_key_env: LINEAR_API_KEY         # default: LINEAR_API_KEY
+    create_issue_on_start: true
+    transition_on_ship: true
+    add_checkpoint_comments: true
+
+  github:
+    enabled: true
+    token_env: GITHUB_TOKEN             # default: GITHUB_TOKEN
+    create_draft_pr_on_pause: true
+    ship_via_pr: false                  # if true, ship merges via PR instead of direct merge
+    add_checkpoint_comments: true
 ```
 
 ### Minimal valid `babel.config.yml`
@@ -666,6 +748,12 @@ babel_ship(): ShipResponse
 
 // babel_history
 babel_history(work_item_id?: string): HistoryResponse
+
+// babel_config — returns effective config as JSON (v0.2)
+babel_config(): ConfigResponse
+
+// babel_create_work_item — for agents with a pre-known ID (v0.2)
+babel_create_work_item(id: string, description: string): WorkItemResponse
 ```
 
 ### Agent Usage Pattern
@@ -751,13 +839,22 @@ Before shipping v0.1, the following must have integration tests:
 
 ---
 
-## What v0.2 Looks Like (not in scope, captured for continuity)
+## What v0.2 Delivered
 
-The things that naturally extend from this foundation:
+All items from the original v0.2 wishlist that have been implemented:
 
-- **Configured test commands:** `run_commands` in `babel.config.yml` — babel run can optionally start a server, run tests, and capture results
-- **Shared checkpoints:** Push checkpoint records as git notes or to a branch so agents on other machines can see them
-- **External work item sync:** JIRA/Linear integration for `babel start PROJ-123`
-- **PR creation:** `babel test` opens a PR against staging with checkpoint record in the description
-- **Checkpoint attestation signing:** GPG/SSH signing of checkpoint records
+- ✅ **`run_commands`:** `babel run` executes configured scripts, captures results in checkpoint records
+- ✅ **Hooks:** 8 lifecycle hook points (`before/after_save`, `before/after_run`, `before/after_ship`, `before/after_pause`)
+- ✅ **Linear integration:** `babel start` creates/links issues; `babel ship` transitions to Done; checkpoints post as comments
+- ✅ **GitHub integration:** `babel pause` creates draft PRs; `babel ship` can ship via PR; checkpoints post as PR comments
+- ✅ **Rules engine:** Four rule types enforced by governance at the right lifecycle point
+- ✅ **Workflow templates:** `babel init` offers four preset configs (solo, standard, cd, enterprise)
+- ✅ **`babel config` and `babel diag`:** DX tooling for inspecting and validating the environment
+
+## What v0.3 Looks Like
+
+- **Shared checkpoints:** Push checkpoint records as git notes or to a branch so other machines can see them
 - **`babel undo`:** Return to last keep checkpoint (requires shared checkpoint storage)
+- **Checkpoint signing:** GPG/SSH signing of checkpoint records
+- **Multi-repo / monorepo support**
+- **JIRA integration** (Linear is done; JIRA follows same pattern)

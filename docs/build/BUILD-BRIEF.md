@@ -94,49 +94,62 @@ npm init -y
 Build in this sequence. Each step should be committed before moving to the next.
 
 ### Step 1: Foundation
-- [ ] TypeScript config (`tsconfig.json`)
-- [ ] Project structure (`src/cli`, `src/core`, `src/mcp`)
-- [ ] `src/types.ts` — all shared types from TECHNICAL-SPEC.md
-- [ ] `src/core/git.ts` — wrapper around `simple-git`. All git operations go here. No git calls outside this file.
-- [ ] `src/core/config.ts` — read and validate `babel.config.yml` with zod
-- [ ] `src/core/state.ts` — read/write `.babel/state.json`
-- [ ] `src/core/checkpoint.ts` — create and read checkpoint records
-- [ ] `src/cli/display.ts` — all terminal output. Nothing else prints directly.
+- [x] TypeScript config (`tsconfig.json`)
+- [x] Project structure (`src/cli`, `src/core`, `src/mcp`)
+- [x] `src/types.ts` — all shared types from TECHNICAL-SPEC.md
+- [x] `src/core/git.ts` — wrapper around `simple-git`. All git operations go here. No git calls outside this file.
+- [x] `src/core/config.ts` — read and validate `babel.config.yml` with zod
+- [x] `src/core/state.ts` — read/write `.babel/state.json`
+- [x] `src/core/checkpoint.ts` — create and read checkpoint records
+- [x] `src/cli/display.ts` — all terminal output. Nothing else prints directly.
 
 ### Step 2: Governance
-- [ ] `src/core/governance.ts` — the enforcement layer. Every command calls this before executing.
-- [ ] Unit tests for governance rules
+- [x] `src/core/governance.ts` — the enforcement layer. Every command calls this before executing.
+- [x] Unit tests for governance rules
 
 ### Step 3: Core Commands (build in lifecycle order)
-- [ ] `babel init`
-- [ ] `babel start`
-- [ ] `babel save`
-- [ ] `babel sync`
-- [ ] `babel state`
-- [ ] `babel pause`
-- [ ] `babel continue`
-- [ ] `babel run`
-- [ ] `babel keep` / `babel refine` / `babel reject` / `babel ship` (verdict commands — one handler, different verdicts)
-- [ ] `babel stop`
-- [ ] `babel history`
-- [ ] `babel ship`
+- [x] `babel init`
+- [x] `babel start`
+- [x] `babel save`
+- [x] `babel sync`
+- [x] `babel state`
+- [x] `babel pause`
+- [x] `babel continue`
+- [x] `babel run`
+- [x] `babel keep` / `babel refine` / `babel reject` / `babel ship` (verdict commands — one handler, different verdicts)
+- [x] `babel stop`
+- [x] `babel history`
+- [x] `babel ship`
 
 ### Step 4: MCP Server
-- [ ] `src/mcp/tools.ts` — define all MCP tools
-- [ ] `src/mcp/index.ts` — MCP server entry point
-- [ ] `babel mcp` command to start the server
-- [ ] Verify `babel_state` returns correct JSON structure
-- [ ] Verify `babel_attest` works correctly for agent verdicts
+- [x] `src/mcp/index.ts` — MCP server entry point (tools defined inline)
+- [x] `babel mcp` command to start the server
+- [x] Verify `babel_state` returns correct JSON structure
+- [x] Verify `babel_attest` works correctly for agent verdicts
 
 ### Step 5: Integration Tests
-- [ ] Full lifecycle test (see TECHNICAL-SPEC.md testing requirements)
-- [ ] Governance enforcement tests
-- [ ] MCP tool tests
+- [x] Full lifecycle test (see TECHNICAL-SPEC.md testing requirements)
+- [x] Governance enforcement tests
+- [x] MCP tool tests
 
 ### Step 6: Polish
-- [ ] `babel help` — clean, minimal help output
-- [ ] Error message quality pass — every git error translated to plain English
-- [ ] `README.md` — installation and quick start
+- [x] `babel help` — clean, minimal help output
+- [x] Error message quality pass — every git error translated to plain English
+- [x] `README.md` — installation and quick start
+
+### Step 7: v0.2 — Integrations & Scripting (added after v0.1 completion)
+- [x] `src/core/scripts.ts` — `run_commands` execution (foreground + background via execa)
+- [x] `src/core/hooks.ts` — lifecycle hooks (before/after save, run, ship)
+- [x] `src/core/rules.ts` — rules engine (commit_message_pattern, path_restriction, files_changed, script)
+- [x] `src/integrations/linear.ts` — Linear GraphQL client, issue lifecycle
+- [x] `src/integrations/github.ts` — Octokit client, draft PRs, checkpoint comments
+- [x] `src/integrations/index.ts` — IntegrationManager coordinating all integrations
+- [x] `src/cli/commands/config.ts` — `babel config show/validate`
+- [x] `src/cli/commands/diag.ts` — `babel diag` environment check
+- [x] Workflow templates in `babel init` (solo, standard, cd, enterprise)
+- [x] MCP expansion: `babel_config`, `babel_create_work_item`
+- [x] `sandbox/` — lifecycle test scripts
+- [x] Tests: scripts, rules, linear (mocked), github (mocked + live gate)
 
 ---
 
