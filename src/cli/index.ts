@@ -13,7 +13,7 @@ import { runState } from './commands/state.js'
 import { runHistory } from './commands/history.js'
 import { runShip } from './commands/ship.js'
 import { runConfigShow, runConfigValidate } from './commands/config.js'
-import { runDoctor } from './commands/doctor.js'
+import { runDiag } from './commands/diag.js'
 
 const program = new Command()
 
@@ -148,10 +148,10 @@ configCmd
   })
 
 program
-  .command('doctor')
+  .command('diag')
   .description('Check that your environment is set up correctly')
   .action(async () => {
-    await runDoctor()
+    await runDiag()
   })
 
 program

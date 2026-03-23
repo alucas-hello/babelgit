@@ -12,8 +12,8 @@ interface Check {
   fix?: string
 }
 
-export async function runDoctor(repoPath: string = process.cwd()): Promise<void> {
-  console.log(`\n  ${chalk.bold('babel doctor')} — checking your environment\n`)
+export async function runDiag(repoPath: string = process.cwd()): Promise<void> {
+  console.log(`\n  ${chalk.bold('babel diag')} — checking your environment\n`)
 
   const checks: Check[] = []
 
@@ -61,7 +61,7 @@ export async function runDoctor(repoPath: string = process.cwd()): Promise<void>
     console.log(`  ${chalk.green('Everything looks good.')}\n`)
   } else {
     const failures = checks.filter(c => !c.passed).length
-    console.log(`  ${chalk.yellow(`${failures} issue(s) found.`)} Fix them and run 'babel doctor' again.\n`)
+    console.log(`  ${chalk.yellow(`${failures} issue(s) found.`)} Fix them and run 'babel diag' again.\n`)
     process.exit(1)
   }
 }
