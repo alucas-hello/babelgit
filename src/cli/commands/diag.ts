@@ -3,6 +3,7 @@ import { isGitRepo, getUserEmail } from '../../core/git.js'
 import { configExists, loadConfig } from '../../core/config.js'
 import { loadRunSession } from '../../core/checkpoint.js'
 import { getCurrentWorkItem } from '../../core/state.js'
+import { getEnforceStatus } from '../../core/enforce.js'
 import chalk from 'chalk'
 
 interface Check {
@@ -35,7 +36,10 @@ export async function runDiag(repoPath: string = process.cwd()): Promise<void> {
   // 6. No stale run session
   checks.push(await checkStaleRunSession(repoPath))
 
-  // 7. Integration credentials (if configured)
+  // 7. Enforcement hooks
+  checks.push(await checkEnforcement(repoPath))
+
+  // 8. Integration credentials (if configured)
   const integrationChecks = await checkIntegrations(repoPath)
   checks.push(...integrationChecks)
 
@@ -167,6 +171,34 @@ async function checkStaleRunSession(repoPath: string): Promise<Check> {
     passed: false,
     detail: `stale session open for ${workItem?.id || '?'} (${age} minutes)`,
     fix: "Call a verdict: babel keep/refine/reject/ship",
+  }
+}
+
+async function checkEnforcement(repoPath: string): Promise<Check> {
+  const status = await getEnforceStatus(repoPath).catch(() => null)
+  if (!status) {
+    return {
+      name: 'enforcement hooks',
+      passed: false,
+      detail: 'could not read .git/hooks',
+    }
+  }
+
+  const conflicts = status.hooks.filter(h => h.conflict)
+
+  if (status.active) {
+    const installedNames = status.hooks.filter(h => h.installed).map(h => h.name)
+    const detail = conflicts.length > 0
+      ? `active (${installedNames.join(', ')}) — ${conflicts.length} hook(s) skipped (conflict)`
+      : `active (${installedNames.join(', ')})`
+    return { name: 'enforcement hooks', passed: true, detail }
+  }
+
+  return {
+    name: 'enforcement hooks',
+    passed: false,
+    detail: 'not active — direct git operations are not blocked',
+    fix: "Run 'babel enforce on' to enable",
   }
 }
 

@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// Mark all git operations from this process as babel-initiated.
+// Git hooks installed by `babel enforce` check for this variable.
+process.env.BABEL_ACTIVE = '1'
+
 import { Command } from 'commander'
 import { runInit } from './commands/init.js'
 import { runStart } from './commands/start.js'
@@ -14,6 +18,7 @@ import { runHistory } from './commands/history.js'
 import { runShip } from './commands/ship.js'
 import { runConfigShow, runConfigValidate } from './commands/config.js'
 import { runDiag } from './commands/diag.js'
+import { runEnforce } from './commands/enforce.js'
 
 const program = new Command()
 
@@ -152,6 +157,13 @@ program
   .description('Check that your environment is set up correctly')
   .action(async () => {
     await runDiag()
+  })
+
+program
+  .command('enforce [action]')
+  .description('Manage git operation enforcement hooks (on/off/status)')
+  .action(async (action?: string) => {
+    await runEnforce(action)
   })
 
 program
