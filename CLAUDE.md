@@ -37,6 +37,7 @@ docs/build/TECHNICAL-SPEC.md   ← exact specifications
 4. **Do not modify the docs/strategy/ documents** without explicit instruction. They are the product strategy and are not implementation targets.
 5. **New scope goes in NOTES.md first.** If you think something is missing, add it there for the human to review before building it.
 6. **All git operations through simple-git.** No `child_process.exec('git ...')`.
+7. **Never run raw git commands in this repository.** This repo uses `babel enforce` — git hooks will reject direct git operations. Use `babel` commands or the MCP tools. If you genuinely need a git operation babel doesn't expose, flag it to the human rather than running it directly.
 
 ---
 

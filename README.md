@@ -142,8 +142,51 @@ You never typed `git ___`.
 | `babel state` | Show current situation |
 | `babel history` | Show work item history and checkpoints |
 | `babel ship` | Deliver work to production |
+| `babel enforce [on\|off\|status]` | Manage git operation enforcement hooks |
 | `babel config show/validate` | Inspect or validate your config |
 | `babel diag` | Check that your environment is set up correctly |
+
+---
+
+## Enforcement — Blocking Direct Git Operations
+
+By default, `babel init` installs git hooks that **block any git operation not initiated by babel**. This applies equally to humans typing `git commit` in a terminal, AI agents using shell tools, and any other automation.
+
+```
+  ✗ Direct git operation blocked.
+
+  This repository uses babelgit for all git operations.
+  Use babel commands instead of raw git.
+
+  To disable enforcement: babel enforce off
+```
+
+**How it works:** Every `babel` process — CLI or MCP server — sets a `BABEL_ACTIVE` environment variable before running git. The hooks check for this variable. If it's absent, the operation is rejected. No tool, no agent, and no brand of AI assistant can bypass it without explicitly disabling enforcement.
+
+**What's covered:**
+
+| Git operation | Blocked? | Hook |
+|---------------|----------|------|
+| `git commit` | ✓ | `pre-commit` |
+| `git push` | ✓ | `pre-push` |
+| `git rebase` | ✓ | `pre-rebase` |
+| `git fetch` | — | No git hook point |
+| `git checkout` | — | No git hook point |
+| `git pull` | — | No git hook point |
+
+fetch/checkout/pull are read operations or non-destructive to shared history, so the gap is acceptable.
+
+**Managing enforcement:**
+
+```bash
+babel enforce           # interactive — shows status and prompts to toggle
+babel enforce on        # install hooks
+babel enforce off       # remove hooks
+babel enforce status    # show current status without prompting
+babel diag              # includes enforcement status in environment check
+```
+
+Enforcement hooks live in `.git/hooks/`, which is local to each machine and not committed. Each developer gets hooks installed when they run `babel init`. If a hook slot already has non-babel content (e.g., a linting pre-commit), babel skips that slot rather than overwriting it and reports the conflict in `babel diag`.
 
 ---
 

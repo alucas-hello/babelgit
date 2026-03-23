@@ -670,12 +670,77 @@ interface GovernanceResult {
 }
 ```
 
-**Governance rules enforced in v0.1:**
+**Governance rules enforced:**
 
 1. **Protected branch write protection:** No push/merge to protected branches except via `babel ship` with required checkpoints
 2. **Agent branch restrictions:** If `caller_type === 'agent'` and `agents.permitted_branch_patterns` is set, operations on non-matching branches are blocked
 3. **Checkpoint requirements:** If `require_checkpoint_for.ship: true`, `babel ship` without a valid checkpoint is blocked
 4. **Agent attestation requirement:** If `agents.require_attestation_before_pause: true`, agent cannot `babel pause` without a run session verdict
+5. **Run session lock:** `babel sync` is blocked when a run session is open — syncing would change the code state after the snapshot was locked
+6. **Git operation enforcement hooks** (v0.2 — see below)
+
+---
+
+## Git Operation Enforcement (v0.2)
+
+This is the mechanism that prevents any tool — human, AI agent, or automation — from running git operations outside of babel.
+
+### The Problem
+
+The governance layer only activates when `babel` is invoked. Nothing in git itself prevents an agent or developer from running `git commit` directly, bypassing every working agreement.
+
+### The Mechanism
+
+Every `babel` process (CLI and MCP server) sets `BABEL_ACTIVE=1` as the first thing it does, before any git operation. Git hooks installed in `.git/hooks/` check for this variable. If absent, the operation is rejected:
+
+```
+  ✗ Direct git operation blocked.
+
+  This repository uses babelgit for all git operations.
+  Use babel commands instead of raw git.
+
+  To disable enforcement: babel enforce off
+```
+
+Because `BABEL_ACTIVE` is an environment variable on the babel process, it is inherited by every git subprocess babel spawns. Any git invocation not started by babel will not have it set.
+
+### Hooks Installed
+
+| Hook | Blocks |
+|------|--------|
+| `pre-commit` | `git commit` |
+| `pre-push` | `git push` |
+| `pre-rebase` | `git rebase` |
+
+`git fetch`, `git checkout`, and `git pull` have no blocking hook points in git's hook system. These operations are non-destructive to shared history, so the gap is acceptable.
+
+### Lifecycle
+
+- **`babel init`** installs enforcement hooks by default — on from inception
+- **`babel enforce on/off`** toggles hooks on an existing repo
+- **`babel enforce status`** shows which hooks are installed without prompting
+- **`babel diag`** reports enforcement status as part of the environment check
+- Hooks that already exist with non-babel content are **never overwritten** — babel skips those slots and reports the conflict
+
+### Implementation
+
+```typescript
+// src/cli/index.ts and src/mcp/index.ts — first line before any imports
+process.env.BABEL_ACTIVE = '1'
+```
+
+```bash
+# .git/hooks/pre-commit (and pre-push, pre-rebase)
+#!/bin/sh
+# babelgit-enforce
+if [ -z "$BABEL_ACTIVE" ]; then
+  echo "  ✗ Direct git operation blocked."
+  echo "  Use babel commands. To disable: babel enforce off"
+  exit 1
+fi
+```
+
+The marker string `# babelgit-enforce` in the hook file is how babel identifies hooks it owns, enabling clean removal with `babel enforce off` without touching hooks from other tools.
 
 **Governance failure output:**
 ```
@@ -850,6 +915,8 @@ All items from the original v0.2 wishlist that have been implemented:
 - ✅ **Rules engine:** Four rule types enforced by governance at the right lifecycle point
 - ✅ **Workflow templates:** `babel init` offers four preset configs (solo, standard, cd, enterprise)
 - ✅ **`babel config` and `babel diag`:** DX tooling for inspecting and validating the environment
+- ✅ **Git operation enforcement:** `babel enforce` + hooks installed at `babel init` — blocks direct git from any source (see "Git Operation Enforcement" section above)
+- ✅ **Run session lock on sync:** `babel sync` blocked during open run session to preserve snapshot integrity
 
 ## What v0.3 Looks Like
 
