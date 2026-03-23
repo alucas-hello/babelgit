@@ -41,29 +41,26 @@ const babelRunner_1 = require("./babelRunner");
 const statusBar_1 = require("./statusBar");
 const sidebarProvider_1 = require("./sidebarProvider");
 const historyPanel_1 = require("./historyPanel");
+const runPanel_1 = require("./runPanel");
 function activate(context) {
     const outputChannel = vscode.window.createOutputChannel('babelgit');
     const watcher = new stateWatcher_1.StateWatcher();
     const runner = new babelRunner_1.BabelRunner(outputChannel);
     const statusBar = new statusBar_1.StatusBarManager(watcher);
     const activeProvider = new sidebarProvider_1.ActiveWorkProvider(watcher);
-    const checkpointsProvider = new sidebarProvider_1.HistoryProvider(watcher);
-    const pausedProvider = new sidebarProvider_1.PausedWorkProvider(watcher);
+    const historyProvider = new sidebarProvider_1.HistoryProvider(watcher);
     const actionsProvider = new sidebarProvider_1.ActionsProvider(watcher);
+    const watcherProvider = new sidebarProvider_1.WatcherProvider(watcher);
     vscode.window.createTreeView('babelgitActive', { treeDataProvider: activeProvider });
-    vscode.window.createTreeView('babelgitHistory', { treeDataProvider: checkpointsProvider });
-    vscode.window.createTreeView('babelgitPaused', { treeDataProvider: pausedProvider });
+    vscode.window.createTreeView('babelgitHistory', { treeDataProvider: historyProvider });
     vscode.window.createTreeView('babelgitActions', { treeDataProvider: actionsProvider });
-    const refreshAll = () => {
-        watcher.refresh();
-    };
+    vscode.window.createTreeView('babelgitWatcher', { treeDataProvider: watcherProvider });
+    const refreshAll = () => { watcher.refresh(); };
     const cmd = (id, fn) => vscode.commands.registerCommand(id, async (...args) => {
         try {
             await fn(...args);
         }
-        catch {
-            // Error already shown in output channel
-        }
+        catch { /* shown in output channel */ }
     });
     context.subscriptions.push(outputChannel, watcher, statusBar, cmd('babelgit.start', async () => {
         const desc = await vscode.window.showInputBox({
@@ -87,6 +84,7 @@ function activate(context) {
     }), cmd('babelgit.run', async () => {
         await runner.run(['run']);
         refreshAll();
+        runPanel_1.RunPanel.show(watcher, runner);
     }), cmd('babelgit.keep', async () => {
         const notes = await vscode.window.showInputBox({
             prompt: 'Keep — what did you verify?',
@@ -164,6 +162,12 @@ function activate(context) {
         const uri = vscode.Uri.file(filePath);
         const doc = await vscode.workspace.openTextDocument(uri);
         await vscode.window.showTextDocument(doc);
+    }), cmd('babelgit.watchStart', async () => {
+        await runner.run(['watch', 'start']);
+        refreshAll();
+    }), cmd('babelgit.watchStop', async () => {
+        await runner.run(['watch', 'stop']);
+        refreshAll();
     }));
 }
 function deactivate() {

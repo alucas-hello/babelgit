@@ -2,8 +2,9 @@ import * as vscode from 'vscode'
 import { StateWatcher } from './stateWatcher'
 import { BabelRunner } from './babelRunner'
 import { StatusBarManager } from './statusBar'
-import { ActiveWorkProvider, HistoryProvider, PausedWorkProvider, ActionsProvider } from './sidebarProvider'
+import { ActiveWorkProvider, HistoryProvider, ActionsProvider, WatcherProvider } from './sidebarProvider'
 import { HistoryPanel } from './historyPanel'
+import { RunPanel } from './runPanel'
 
 export function activate(context: vscode.ExtensionContext): void {
   const outputChannel = vscode.window.createOutputChannel('babelgit')
@@ -11,26 +12,20 @@ export function activate(context: vscode.ExtensionContext): void {
   const runner = new BabelRunner(outputChannel)
   const statusBar = new StatusBarManager(watcher)
   const activeProvider = new ActiveWorkProvider(watcher)
-  const checkpointsProvider = new HistoryProvider(watcher)
-  const pausedProvider = new PausedWorkProvider(watcher)
+  const historyProvider = new HistoryProvider(watcher)
   const actionsProvider = new ActionsProvider(watcher)
+  const watcherProvider = new WatcherProvider(watcher)
 
   vscode.window.createTreeView('babelgitActive', { treeDataProvider: activeProvider })
-  vscode.window.createTreeView('babelgitHistory', { treeDataProvider: checkpointsProvider })
-  vscode.window.createTreeView('babelgitPaused', { treeDataProvider: pausedProvider })
+  vscode.window.createTreeView('babelgitHistory', { treeDataProvider: historyProvider })
   vscode.window.createTreeView('babelgitActions', { treeDataProvider: actionsProvider })
+  vscode.window.createTreeView('babelgitWatcher', { treeDataProvider: watcherProvider })
 
-  const refreshAll = () => {
-    watcher.refresh()
-  }
+  const refreshAll = () => { watcher.refresh() }
 
   const cmd = (id: string, fn: (...args: unknown[]) => Promise<void>) =>
     vscode.commands.registerCommand(id, async (...args: unknown[]) => {
-      try {
-        await fn(...args)
-      } catch {
-        // Error already shown in output channel
-      }
+      try { await fn(...args) } catch { /* shown in output channel */ }
     })
 
   context.subscriptions.push(
@@ -62,6 +57,7 @@ export function activate(context: vscode.ExtensionContext): void {
     cmd('babelgit.run', async () => {
       await runner.run(['run'])
       refreshAll()
+      RunPanel.show(watcher, runner)
     }),
 
     cmd('babelgit.keep', async () => {
@@ -151,7 +147,17 @@ export function activate(context: vscode.ExtensionContext): void {
       const uri = vscode.Uri.file(filePath)
       const doc = await vscode.workspace.openTextDocument(uri)
       await vscode.window.showTextDocument(doc)
-    })
+    }),
+
+    cmd('babelgit.watchStart', async () => {
+      await runner.run(['watch', 'start'])
+      refreshAll()
+    }),
+
+    cmd('babelgit.watchStop', async () => {
+      await runner.run(['watch', 'stop'])
+      refreshAll()
+    }),
   )
 }
 

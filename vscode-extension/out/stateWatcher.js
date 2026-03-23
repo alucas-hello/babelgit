@@ -176,6 +176,35 @@ class StateWatcher {
             return null;
         return path.join(this.workspaceRoot, '.babel', 'notes', `${id}.md`);
     }
+    get watchStatus() {
+        if (!this.workspaceRoot)
+            return null;
+        try {
+            const pidFile = path.join(this.workspaceRoot, '.babel', 'watch.pid');
+            const statusFile = path.join(this.workspaceRoot, '.babel', 'watch-status.json');
+            const running = fs.existsSync(pidFile);
+            if (!running)
+                return { running: false };
+            const status = fs.existsSync(statusFile) ? JSON.parse(fs.readFileSync(statusFile, 'utf8')) : {};
+            return { running: true, pid: status.pid, startedAt: status.started_at, lastCheck: status.last_check, alerts: status.alerts ?? [] };
+        }
+        catch {
+            return null;
+        }
+    }
+    get watchEvents() {
+        if (!this.workspaceRoot)
+            return [];
+        try {
+            const eventsFile = path.join(this.workspaceRoot, '.babel', 'watch-events.json');
+            if (!fs.existsSync(eventsFile))
+                return [];
+            return JSON.parse(fs.readFileSync(eventsFile, 'utf8'));
+        }
+        catch {
+            return [];
+        }
+    }
     get state() {
         return this._currentState;
     }
