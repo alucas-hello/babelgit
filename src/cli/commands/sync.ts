@@ -30,6 +30,15 @@ export async function runSync(
     process.exit(1)
   }
 
+  if (workItem.stage === 'run_session_open') {
+    error(
+      'Cannot sync during an open run session.',
+      'Your snapshot is locked. Syncing would change the code state after locking.',
+      'Call a verdict first (babel keep / refine / reject / ship), then sync.'
+    )
+    process.exit(1)
+  }
+
   if (opts.continue) {
     // User resolved conflicts — continue rebase/merge
     if (config.sync_strategy === 'rebase') {

@@ -1,0 +1,31 @@
+# babel.config.yml
+# This file is the team's working agreement.
+# Commit it. Review changes to it. It applies equally to everyone.
+
+version: 1
+base_branch: main
+protected_branches:
+  - main
+branch_pattern: feature/{id}-{slug}
+work_item_id:
+  source: local
+  prefix: BBL
+require_checkpoint_for:
+  pause: false
+  ship: true
+sync_strategy: rebase
+agents:
+  permitted_branch_patterns:
+    - feature/*
+    - fix/*
+  require_attestation_before_pause: true
+require_confirmation:
+  - stop
+verdicts:
+  keep: ready
+  refine: refine
+  reject: reject
+  ship: deploy
+hooks:
+  before_ship:
+    - npm run build
