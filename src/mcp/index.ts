@@ -257,6 +257,7 @@ export async function startMcpServer(): Promise<void> {
 
   const transport = new StdioServerTransport()
   await server.connect(transport)
+  console.error('[babelgit] MCP server started')
 }
 
 type ErrorCode = 'GOVERNANCE_BLOCKED' | 'NO_WORK_ITEM' | 'NO_CONFIG' | 'GIT_ERROR' | 'UNKNOWN'
@@ -283,11 +284,20 @@ function classifyError(text: string): ErrorCode {
   return 'UNKNOWN'
 }
 
+class ProcessExitError extends Error {
+  code: number
+  constructor(code: number) {
+    super(`process.exit(${code})`)
+    this.code = code
+  }
+}
+
 async function captureOutput(fn: () => Promise<void>): Promise<CaptureResult> {
   const chunks: string[] = []
   const errorChunks: string[] = []
   const originalLog = console.log
   const originalError = console.error
+  const originalExit = process.exit
 
   console.log = (...args: unknown[]) => {
     chunks.push(args.map(String).join(' '))
@@ -296,20 +306,30 @@ async function captureOutput(fn: () => Promise<void>): Promise<CaptureResult> {
     errorChunks.push(args.map(String).join(' '))
     chunks.push(args.map(String).join(' '))
   }
+  process.exit = ((code?: number) => {
+    throw new ProcessExitError(code ?? 0)
+  }) as never
 
   let threw = false
+  let exitCode: number | undefined
   try {
     await fn()
   } catch (err) {
-    threw = true
-    chunks.push(`Error: ${(err as Error).message}`)
+    if (err instanceof ProcessExitError) {
+      exitCode = err.code
+      threw = err.code !== 0
+    } else {
+      threw = true
+      chunks.push(`Error: ${(err as Error).message}`)
+    }
   } finally {
     console.log = originalLog
     console.error = originalError
+    process.exit = originalExit
   }
 
   const text = chunks.join('\n')
-  const isError = threw || errorChunks.length > 0
+  const isError = threw || errorChunks.length > 0 || (exitCode !== undefined && exitCode !== 0)
 
   if (isError) {
     return { text, isError: true, error_code: classifyError(text) }
