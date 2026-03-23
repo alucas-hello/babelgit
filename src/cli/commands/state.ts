@@ -1,5 +1,5 @@
 import { loadConfig } from '../../core/config.js'
-import { getCurrentWorkItem, loadState, getWorkItem } from '../../core/state.js'
+import { getCurrentWorkItem, loadState, getWorkItem, findPausedWorkItems } from '../../core/state.js'
 import {
   getUncommittedFileCount,
   getCommitsAheadOfBase,
@@ -8,7 +8,7 @@ import {
 } from '../../core/git.js'
 import { loadCheckpoints, loadRunSession } from '../../core/checkpoint.js'
 import { minutesAgo } from '../../core/workitem.js'
-import { showState, showNoWorkItem, error } from '../display.js'
+import { showState, showNoWorkItem, showPausedWorkItems, error } from '../display.js'
 import type { StateResponse } from '../../types.js'
 
 export async function runState(
@@ -36,10 +36,11 @@ export async function runState(
   }
 
   if (!workItem) {
+    const paused = await findPausedWorkItems('', repoPath)
     if (opts.json) {
-      console.log(JSON.stringify({ work_item: null, suggested_next: 'babel start' }, null, 2))
+      console.log(JSON.stringify({ work_item: null, paused_work_items: paused, suggested_next: paused.length ? 'babel continue' : 'babel start' }, null, 2))
     } else {
-      showNoWorkItem()
+      showNoWorkItem(paused.map(wi => ({ id: wi.id, description: wi.description, branch: wi.branch })))
     }
     return
   }

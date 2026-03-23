@@ -1,0 +1,95 @@
+{
+  "name": "babelgit",
+  "displayName": "babelgit",
+  "description": "babelgit integration for VSCode — status bar, sidebar, command palette",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [
+    "workspaceContains:.babel/state.json",
+    "workspaceContains:babel.config.yml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "babelgit.start",
+        "title": "Babel: Start"
+      },
+      {
+        "command": "babelgit.save",
+        "title": "Babel: Save"
+      },
+      {
+        "command": "babelgit.run",
+        "title": "Babel: Run"
+      },
+      {
+        "command": "babelgit.keep",
+        "title": "Babel: Keep"
+      },
+      {
+        "command": "babelgit.refine",
+        "title": "Babel: Refine"
+      },
+      {
+        "command": "babelgit.reject",
+        "title": "Babel: Reject"
+      },
+      {
+        "command": "babelgit.ship",
+        "title": "Babel: Ship"
+      },
+      {
+        "command": "babelgit.state",
+        "title": "Babel: Refresh State"
+      },
+      {
+        "command": "babelgit.history",
+        "title": "Babel: History"
+      },
+      {
+        "command": "babelgit.sync",
+        "title": "Babel: Sync"
+      },
+      {
+        "command": "babelgit.pause",
+        "title": "Babel: Pause"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "babelgitWorkItem",
+          "name": "babelgit"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "babelgit.state",
+          "when": "view == babelgitWorkItem",
+          "group": "navigation"
+        },
+        {
+          "command": "babelgit.history",
+          "when": "view == babelgitWorkItem",
+          "group": "navigation"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -p ./ --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.0.0"
+  }
+}

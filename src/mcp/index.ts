@@ -20,6 +20,7 @@ import { runVerdict } from '../cli/commands/verdict.js'
 import { runShip } from '../cli/commands/ship.js'
 import { runState } from '../cli/commands/state.js'
 import { runHistory } from '../cli/commands/history.js'
+import { loadState } from '../core/state.js'
 import type { Verdict } from '../types.js'
 
 // Set agent context so governance knows this is an agent
@@ -154,6 +155,20 @@ export async function startMcpServer(): Promise<void> {
           required: ['id', 'description'],
         },
       },
+      {
+        name: 'babel_list_work_items',
+        description: 'List all known work items. Use this to discover paused items when resuming work.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            filter: {
+              type: 'string',
+              enum: ['paused', 'in_progress', 'all'],
+              description: 'Filter by stage. Defaults to "all".',
+            },
+          },
+        },
+      },
     ]
     return { tools }
   })
@@ -210,18 +225,33 @@ export async function startMcpServer(): Promise<void> {
           // babel_start with an explicit ID: pass "ID description" so start parses both
           await runStart(a.id as string)
           break
+        case 'babel_list_work_items': {
+          const filter = (a.filter as string | undefined) || 'all'
+          const state = await loadState()
+          const items = Object.values(state.work_items).filter(item => {
+            if (filter === 'all') return true
+            return item.stage === filter
+          })
+          console.log(JSON.stringify(items, null, 2))
+          break
+        }
         default:
           throw new Error(`Unknown tool: ${name}`)
       }
     })
 
+    const responseText = output.error_code
+      ? `${output.text}\n\nerror_code: ${output.error_code}`
+      : output.text
+
     return {
       content: [
         {
           type: 'text',
-          text: output,
+          text: responseText,
         },
       ],
+      isError: output.isError,
     }
   })
 
@@ -229,8 +259,33 @@ export async function startMcpServer(): Promise<void> {
   await server.connect(transport)
 }
 
-async function captureOutput(fn: () => Promise<void>): Promise<string> {
+type ErrorCode = 'GOVERNANCE_BLOCKED' | 'NO_WORK_ITEM' | 'NO_CONFIG' | 'GIT_ERROR' | 'UNKNOWN'
+
+interface CaptureResult {
+  text: string
+  isError: boolean
+  error_code?: ErrorCode
+}
+
+function classifyError(text: string): ErrorCode {
+  if (/Operation blocked|no verified checkpoint|run session is open|Cannot .* during an open run session/i.test(text)) {
+    return 'GOVERNANCE_BLOCKED'
+  }
+  if (/No active work item|No work item found|no work item/i.test(text)) {
+    return 'NO_WORK_ITEM'
+  }
+  if (/NO_CONFIG|No babel\.config\.yml/i.test(text)) {
+    return 'NO_CONFIG'
+  }
+  if (/git|branch|commit|merge|rebase|push|pull/i.test(text)) {
+    return 'GIT_ERROR'
+  }
+  return 'UNKNOWN'
+}
+
+async function captureOutput(fn: () => Promise<void>): Promise<CaptureResult> {
   const chunks: string[] = []
+  const errorChunks: string[] = []
   const originalLog = console.log
   const originalError = console.error
 
@@ -238,17 +293,26 @@ async function captureOutput(fn: () => Promise<void>): Promise<string> {
     chunks.push(args.map(String).join(' '))
   }
   console.error = (...args: unknown[]) => {
+    errorChunks.push(args.map(String).join(' '))
     chunks.push(args.map(String).join(' '))
   }
 
+  let threw = false
   try {
     await fn()
   } catch (err) {
+    threw = true
     chunks.push(`Error: ${(err as Error).message}`)
   } finally {
     console.log = originalLog
     console.error = originalError
   }
 
-  return chunks.join('\n')
+  const text = chunks.join('\n')
+  const isError = threw || errorChunks.length > 0
+
+  if (isError) {
+    return { text, isError: true, error_code: classifyError(text) }
+  }
+  return { text, isError: false }
 }

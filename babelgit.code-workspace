@@ -1,0 +1,13 @@
+{
+  "folders": [
+    {
+      "name": "babelgit (root)",
+      "path": "."
+    },
+    {
+      "name": "vscode-extension",
+      "path": "vscode-extension"
+    }
+  ],
+  "settings": {}
+}
