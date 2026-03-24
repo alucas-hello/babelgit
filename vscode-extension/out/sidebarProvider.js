@@ -302,8 +302,7 @@ class HistoryProvider {
                 : vscode.TreeItemCollapsibleState.Collapsed;
         const isDraft = wi.id.startsWith('DRAFT-');
         const displayId = isDraft ? `⏳ ${wi.id}` : wi.id;
-        const node = new TreeNode(wi.description, 'historyGroup', collapsible);
-        node.description = displayId;
+        const node = new TreeNode(`${displayId}  ${wi.description}`, 'historyGroup', collapsible);
         node.tooltip = wi.description;
         const meta = BUCKET_META[stage] ?? { icon: 'circle-outline', color: 'foreground' };
         node.iconPath = isDraft
