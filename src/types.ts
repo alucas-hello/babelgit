@@ -4,6 +4,7 @@ export type WorkflowStage =
   | 'paused'
   | 'run_session_open'
   | 'pr_open'
+  | 'merged'
   | 'shipped'
   | 'stopped'
 
