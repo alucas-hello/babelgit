@@ -3,6 +3,7 @@ export type WorkflowStage =
   | 'in_progress'
   | 'paused'
   | 'run_session_open'
+  | 'pr_open'
   | 'shipped'
   | 'stopped'
 

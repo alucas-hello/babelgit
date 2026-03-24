@@ -82,7 +82,24 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
   if (config.integrations?.github?.enabled && config.integrations.github.ship_via_pr) {
     const { IntegrationManager } = await import('../../integrations/index.js')
     const mgr = new IntegrationManager(config, repoPath)
-    await mgr.onShip(workItem)
+    const prFields = await mgr.onShip(workItem)
+    if (prFields.pr_url) {
+      // PR created, awaiting review — set pr_open stage
+      workItem.stage = 'pr_open'
+      workItem.pr_url = prFields.pr_url
+      workItem.pr_number = prFields.pr_number
+      workItem.ship_ready = false
+      await saveWorkItem(workItem, repoPath)
+      console.log()
+      success(`PR open: ${workItem.id} — "${workItem.description}"`)
+      console.log(`\n  PR: ${prFields.pr_url}`)
+      console.log(`  Merge when approved — branch stays until then.\n`)
+    } else {
+      // auto_merge: true — fully shipped
+      workItem.stage = 'shipped'
+      await saveWorkItem(workItem, repoPath)
+      await setCurrentWorkItem(undefined, repoPath)
+    }
     return
   }
 

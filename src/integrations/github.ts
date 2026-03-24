@@ -81,9 +81,9 @@ export class GitHubIntegration {
     }
   }
 
-  /** Called from babel ship (ship_via_pr mode) — creates a ready PR. */
-  async onShip(workItem: WorkItem, baseBranch: string): Promise<void> {
-    if (!this.isEnabled()) return
+  /** Called from babel ship (ship_via_pr mode) — creates a ready PR. Returns PR fields to store on work item. */
+  async onShip(workItem: WorkItem, baseBranch: string): Promise<Partial<WorkItem>> {
+    if (!this.isEnabled()) return {}
 
     try {
       const { owner, repo } = await this.getRepoInfo()
@@ -91,64 +91,55 @@ export class GitHubIntegration {
       // If we already have a PR, convert it from draft and mark ready
       if (workItem.pr_number) {
         await this.octokit.rest.pulls.update({
-          owner,
-          repo,
-          pull_number: workItem.pr_number,
-          draft: false,
+          owner, repo, pull_number: workItem.pr_number, draft: false,
         })
 
         if (this.config.pr_auto_merge) {
           await this.octokit.rest.pulls.merge({
-            owner,
-            repo,
-            pull_number: workItem.pr_number,
+            owner, repo, pull_number: workItem.pr_number,
             merge_method: 'squash',
             commit_title: `ship(${workItem.id}): ${workItem.description}`,
           })
+          return {}
         } else {
           console.log(`\n  PR ready for review: ${workItem.pr_url}`)
-          console.log(`  Merge it when approved, then the branch will be cleaned up automatically.\n`)
+          console.log(`  Merge it when approved.\n`)
+          return { pr_number: workItem.pr_number, pr_url: workItem.pr_url }
         }
-        return
       }
 
       // Create a new PR for ship
-      const body = buildPrBody(workItem)
       const pr = await this.octokit.rest.pulls.create({
-        owner,
-        repo,
+        owner, repo,
         title: `ship(${workItem.id}): ${workItem.description}`,
         head: workItem.branch!,
         base: baseBranch,
-        body,
+        body: buildPrBody(workItem),
         draft: false,
       })
 
       if (this.config.pr_labels?.length) {
         await this.octokit.rest.issues.addLabels({
-          owner,
-          repo,
-          issue_number: pr.data.number,
-          labels: this.config.pr_labels,
+          owner, repo, issue_number: pr.data.number, labels: this.config.pr_labels,
         }).catch(() => {})
       }
 
       if (this.config.pr_auto_merge) {
         await this.octokit.rest.pulls.merge({
-          owner,
-          repo,
-          pull_number: pr.data.number,
+          owner, repo, pull_number: pr.data.number,
           merge_method: 'squash',
           commit_title: `ship(${workItem.id}): ${workItem.description}`,
         })
         console.log(`\n  ✓ PR merged: ${pr.data.html_url}\n`)
+        return {}
       } else {
-        console.log(`\n  PR created: ${pr.data.html_url}`)
+        console.log(`\n  PR opened: ${pr.data.html_url}`)
         console.log(`  Merge it when approved.\n`)
+        return { pr_number: pr.data.number, pr_url: pr.data.html_url }
       }
     } catch (err) {
       console.error(`  GitHub PR error: ${(err as Error).message}`)
-      // Non-fatal in ship context — direct merge already happened
+      return {}
     }
   }
 
