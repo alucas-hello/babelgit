@@ -20,6 +20,8 @@ export interface WorkItemState {
   created_at: string
   planned_at?: string
   paused_notes?: string
+  pr_url?: string
+  pr_number?: number
 }
 
 export interface BabelVerdicts {

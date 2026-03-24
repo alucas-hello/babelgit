@@ -78,13 +78,24 @@ export class IntegrationManager {
   }
 
   /** Called from babel ship — transitions Linear issue, creates/merges GitHub PR. */
-  async onShip(workItem: WorkItem): Promise<void> {
-    await Promise.allSettled([
+  async onShip(workItem: WorkItem): Promise<Partial<WorkItem>> {
+    let fields: Partial<WorkItem> = {}
+    const results = await Promise.allSettled([
       this.linear?.onShip(workItem),
       this.github
         ? this.github.onShip(workItem, this.config.integrations?.github?.pr_base_branch || this.config.base_branch)
         : undefined,
     ])
+    // Collect PR fields from GitHub result
+    const ghResult = results[1]
+    if (ghResult.status === 'fulfilled' && ghResult.value) {
+      fields = { ...fields, ...ghResult.value }
+    }
+    if (Object.keys(fields).length > 0) {
+      const updated = { ...workItem, ...fields }
+      await saveWorkItem(updated, this.repoPath)
+    }
+    return fields
   }
 
   hasAnyEnabled(): boolean {

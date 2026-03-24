@@ -185,13 +185,14 @@ interface BucketMeta {
 }
 
 const BUCKET_META: Record<string, BucketMeta> = {
-  todo:             { icon: 'circle-outline',  color: 'charts.blue',   expanded: true  },
-  in_progress:      { icon: 'circle-filled',   color: 'charts.blue',   expanded: true  },
-  ship_ready:       { icon: 'git-merge',       color: 'charts.green',  expanded: true  },
-  run_session_open: { icon: 'circle-filled',   color: 'charts.yellow', expanded: true  },
-  paused:           { icon: 'debug-pause',     color: 'charts.orange', expanded: true  },
-  shipped:          { icon: 'pass',            color: 'charts.green',  expanded: false },
-  stopped:          { icon: 'circle-slash',    color: 'charts.red',    expanded: false },
+  todo:             { icon: 'circle-outline',    color: 'charts.blue',   expanded: true  },
+  in_progress:      { icon: 'circle-filled',     color: 'charts.blue',   expanded: true  },
+  ship_ready:       { icon: 'git-merge',         color: 'charts.green',  expanded: true  },
+  pr_open:          { icon: 'git-pull-request',  color: 'charts.purple', expanded: true  },
+  run_session_open: { icon: 'circle-filled',     color: 'charts.yellow', expanded: true  },
+  paused:           { icon: 'debug-pause',       color: 'charts.orange', expanded: true  },
+  shipped:          { icon: 'pass',              color: 'charts.green',  expanded: false },
+  stopped:          { icon: 'circle-slash',      color: 'charts.red',    expanded: false },
 }
 
 const VERDICT_ICONS: Record<string, string> = { keep: '✓', ship: '✓', refine: '~', reject: '✗' }
@@ -233,7 +234,7 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     // Ordered bucket stages
-    const stageOrder: string[] = ['todo', 'in_progress', 'ship_ready', 'run_session_open', 'paused', 'shipped', 'stopped']
+    const stageOrder: string[] = ['todo', 'in_progress', 'ship_ready', 'pr_open', 'run_session_open', 'paused', 'shipped', 'stopped']
 
     // Label for shipped bucket uses config's verdicts.ship value
     const shipLabel = capitalize(verdicts.ship)
@@ -242,6 +243,7 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
       todo:             'Todo',
       in_progress:      'In Progress',
       ship_ready:       'Ready to Merge',
+      pr_open:          'PR Open',
       run_session_open: 'Review Open',
       paused:           'Paused',
       shipped:          shipLabel,
@@ -368,6 +370,14 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
       trashNode.iconPath = new vscode.ThemeIcon('trash', new vscode.ThemeColor('list.errorForeground'))
       trashNode.command = { command: 'babelgit.deleteItem', title: 'Trash', arguments: [wi.id] }
       children.push(trashNode)
+    }
+
+    if (stage === 'pr_open' && wi.pr_url) {
+      const prNode = new TreeNode('View PR →', 'action', vscode.TreeItemCollapsibleState.None)
+      prNode.iconPath = new vscode.ThemeIcon('git-pull-request', new vscode.ThemeColor('charts.purple'))
+      prNode.command = { command: 'vscode.open', title: 'View PR', arguments: [vscode.Uri.parse(wi.pr_url)] }
+      prNode.tooltip = wi.pr_url
+      children.push(prNode)
     }
 
     if (wi.ship_ready && stage !== 'shipped') {
