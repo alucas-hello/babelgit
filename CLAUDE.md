@@ -76,6 +76,29 @@ The hook also fires with a specific message if your current WI is in a non-edita
 
 ---
 
+## The Review Handoff — Critical
+
+When your implementation work is complete, the sequence is:
+
+1. `babel save "what you did"` — checkpoint
+2. `babel run` — lock the snapshot, open the review session
+3. **STOP.** Do not call `babel keep`, `babel ship`, or any verdict automatically.
+
+Instead, tell the user:
+- What you built and what changed
+- Which files are worth reviewing
+- That the review session is open and they can inspect (e.g. Cmd+R in VSCode)
+
+Then **wait** for the user to provide a verdict and notes. Execute whatever they give you:
+- `babel keep "their notes"` — solid, continue
+- `babel refine "their notes"` — needs changes
+- `babel reject "their reason"` — wrong direction, reverts
+- `babel ship "their notes"` → then `babel ship` — ready to merge
+
+**Why this matters:** `babel run` is the human review gate. Chaining it immediately with `babel keep` + `babel ship` bypasses the user's judgment entirely — which defeats the purpose of the product we're building together. The user's verdict, in their words, is the point.
+
+---
+
 ## What To Do If You Get Stuck
 
 1. Re-read `docs/build/TECHNICAL-SPEC.md` — the answer is probably there
