@@ -294,13 +294,14 @@ class HistoryProvider {
     buildWINode(wi, group, stage, verdicts, githubBaseUrl, workspacePath, currentWorkItemId) {
         const isTodo = stage === 'todo';
         const isPaused = stage === 'paused';
-        const collapsible = (isTodo || isPaused)
+        const activeStages = new Set(['todo', 'in_progress', 'ship_ready', 'run_session_open', 'paused', 'pr_open']);
+        const collapsible = activeStages.has(stage)
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
         const isDraft = wi.id.startsWith('DRAFT-');
         const displayId = isDraft ? `⏳ ${wi.id}` : wi.id;
-        const node = new TreeNode(displayId, 'historyGroup', collapsible, wi.description);
-        node.description = wi.description;
+        const node = new TreeNode(displayId, 'historyGroup', collapsible);
+        node.tooltip = wi.description;
         const meta = BUCKET_META[stage] ?? { icon: 'circle-outline', color: 'foreground' };
         node.iconPath = isDraft
             ? new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.yellow'))
@@ -319,6 +320,18 @@ class HistoryProvider {
             }
         }
         const children = [];
+        // Description wrapped to 2 lines for all items
+        const descLines = splitIntoLines(wi.description, 2);
+        for (const line of descLines) {
+            const lineNode = new TreeNode(line, 'descLine', vscode.TreeItemCollapsibleState.None);
+            lineNode.tooltip = wi.description;
+            if (workspacePath) {
+                lineNode.command = isTodo
+                    ? { command: 'babelgit.openNotes', title: 'Open spec', arguments: [`${workspacePath}/.babel/notes/${wi.id}.md`] }
+                    : { command: 'babelgit.openWorkItem', title: 'Open detail', arguments: [wi.id] };
+            }
+            children.push(lineNode);
+        }
         if (isTodo) {
             if (isDraft) {
                 const waitNode = new TreeNode('Waiting for ID reservation…', 'label', vscode.TreeItemCollapsibleState.None);
