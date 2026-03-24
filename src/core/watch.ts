@@ -84,10 +84,27 @@ export async function runDaemon(repoPath: string): Promise<void> {
     await sleep(500)
     watcherReady = true
 
+    // Debounce map for spec sync — avoid hammering git on rapid writes
+    const specSyncTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
     const watcher = fs.watch(repoPath, { recursive: true }, (_event, filename) => {
       if (!watcherReady || !filename) return
 
-      // Ignore .git/, .babel/, node_modules/
+      // Special case: .babel/notes/WI-XXX.md — sync spec to GitHub branch
+      const notesMatch = filename.match(/^\.babel[/\\]notes[/\\]([A-Z]+-\d+)\.md$/)
+      if (notesMatch) {
+        const wiId = notesMatch[1]
+        // Debounce: wait 3s after last write before syncing
+        const existing = specSyncTimers.get(wiId)
+        if (existing) clearTimeout(existing)
+        specSyncTimers.set(wiId, setTimeout(() => {
+          specSyncTimers.delete(wiId)
+          syncSpecToGithub(repoPath, wiId)
+        }, 3000))
+        return
+      }
+
+      // Ignore .git/, other .babel/, node_modules/
       if (
         filename.startsWith('.git/') ||
         filename.startsWith('.babel/') ||
@@ -309,4 +326,60 @@ export function getWatchStatus(repoPath: string): { running: boolean; pid?: numb
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// ─── Spec sync ────────────────────────────────────────────────────────────────
+
+function syncSpecToGithub(repoPath: string, wiId: string): void {
+  try {
+    const state = JSON.parse(fs.readFileSync(path.join(repoPath, '.babel', 'state.json'), 'utf8'))
+    const wi = state.work_items?.[wiId]
+    if (!wi || wi.stage !== 'todo' || !wi.branch) return
+
+    const notesPath = path.join(repoPath, '.babel', 'notes', `${wiId}.md`)
+    if (!fs.existsSync(notesPath)) return
+
+    // Verify branch exists on remote
+    const remoteCheck = spawnSync('git', ['ls-remote', '--exit-code', '--heads', 'origin', wi.branch], {
+      cwd: repoPath, encoding: 'utf8',
+    })
+    if (remoteCheck.status !== 0) return // not pushed yet — skip silently
+
+    // Use a temporary worktree to update the spec without touching current branch
+    const worktreePath = path.join(repoPath, '.babel', `spec-sync-${wiId}`)
+    try {
+      // Remove stale worktree if it exists
+      spawnSync('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+
+      const addResult = spawnSync('git', ['worktree', 'add', '--force', worktreePath, wi.branch], {
+        cwd: repoPath, encoding: 'utf8',
+      })
+      if (addResult.status !== 0) return
+
+      const specsDir = path.join(worktreePath, 'docs', 'specs')
+      fs.mkdirSync(specsDir, { recursive: true })
+      const specDest = path.join(specsDir, `${wiId}.md`)
+      fs.copyFileSync(notesPath, specDest)
+
+      spawnSync('git', ['add', specDest], { cwd: worktreePath })
+
+      // Only commit if there are staged changes
+      const diff = spawnSync('git', ['diff', '--cached', '--quiet'], { cwd: worktreePath })
+      if (diff.status === 0) return // no changes
+
+      spawnSync('git', ['commit', '-m', `spec(${wiId}): sync`], { cwd: worktreePath, encoding: 'utf8' })
+      spawnSync('git', ['push', 'origin', wi.branch], { cwd: worktreePath, encoding: 'utf8' })
+
+      appendEvent(repoPath, {
+        type: 'started', // reuse 'started' type — no dedicated 'spec_sync' type
+        message: `Synced spec for ${wiId} to GitHub`,
+        file: `docs/specs/${wiId}.md`,
+        timestamp: new Date().toISOString(),
+      })
+    } finally {
+      spawnSync('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+    }
+  } catch {
+    // Non-fatal — spec sync is best-effort
+  }
 }

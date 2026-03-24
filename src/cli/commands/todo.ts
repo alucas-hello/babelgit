@@ -102,79 +102,59 @@ async function pushTodo(idArg: string | undefined, repoPath: string): Promise<vo
   const checkRemote = spawnSync('git', ['ls-remote', '--exit-code', '--heads', 'origin', branchName], {
     cwd: repoPath, encoding: 'utf8',
   })
+
+  // Branch already exists — re-sync spec via worktree
   if (checkRemote.status === 0) {
-    info(`Branch '${branchName}' already exists on origin.`)
-    // Update branch field if not set
     if (!wi.branch) {
       wi.branch = branchName
       await saveWorkItem(wi, repoPath)
     }
+    await syncSpecWorktree(repoPath, wi.id, branchName)
     return
   }
 
-  // Create branch from base, commit spec, push
+  // Initial push: create branch from base using a worktree, commit spec, push
   const base = config.base_branch
   const userEmail = await getUserEmail(repoPath)
+  const startPoint = spawnSync('git', ['rev-parse', '--verify', `origin/${base}`], { cwd: repoPath }).status === 0
+    ? `origin/${base}` : base
 
-  // Stash any current changes so we can safely create the branch
-  const stashResult = spawnSync('git', ['stash', '--include-untracked', '-m', `babel-todo-push-stash-${id}`], {
-    cwd: repoPath, encoding: 'utf8',
-  })
-  const stashed = stashResult.status === 0 && !stashResult.stdout.includes('No local changes')
-
+  const worktreePath = path.join(repoPath, '.babel', `spec-push-${id}`)
   try {
-    // Create branch from remote base or local base
-    const startPoint = checkRemote.status !== 0
-      ? (spawnSync('git', ['rev-parse', '--verify', `origin/${base}`], { cwd: repoPath }).status === 0
-        ? `origin/${base}` : base)
-      : base
+    // Clean up stale worktree if present
+    spawnSync('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
 
-    const checkoutResult = spawnSync('git', ['checkout', '-b', branchName, startPoint], {
+    // Create branch + worktree in one step
+    const addResult = spawnSync('git', ['worktree', 'add', '-b', branchName, worktreePath, startPoint], {
       cwd: repoPath, encoding: 'utf8',
     })
-    if (checkoutResult.status !== 0) {
-      throw new Error(checkoutResult.stderr)
-    }
+    if (addResult.status !== 0) throw new Error(addResult.stderr)
 
-    // Write spec file to docs/specs/
-    const specsDir = path.join(repoPath, 'docs', 'specs')
+    // Write spec file
+    const specsDir = path.join(worktreePath, 'docs', 'specs')
     fs.mkdirSync(specsDir, { recursive: true })
     const specPath = path.join(specsDir, `${id}.md`)
-
-    // Read from .babel/notes if it exists, else use description
     const notesPath = path.join(repoPath, '.babel', 'notes', `${id}.md`)
     const specContent = fs.existsSync(notesPath)
       ? fs.readFileSync(notesPath, 'utf8')
       : `# ${id}: ${wi.description}\n\nStatus: todo\nPlanned: ${wi.planned_at ?? wi.created_at}\nAuthor: ${userEmail}\n`
-
     fs.writeFileSync(specPath, specContent)
 
-    spawnSync('git', ['add', specPath], { cwd: repoPath })
+    spawnSync('git', ['add', specPath], { cwd: worktreePath })
     const commitResult = spawnSync('git', [
       '-c', `user.email=${userEmail}`,
       'commit', '-m', `todo(${id}): ${wi.description}`,
-    ], { cwd: repoPath, encoding: 'utf8' })
-    if (commitResult.status !== 0) {
-      throw new Error(commitResult.stderr)
-    }
+    ], { cwd: worktreePath, encoding: 'utf8' })
+    if (commitResult.status !== 0) throw new Error(commitResult.stderr)
 
     const pushResult = spawnSync('git', ['push', '-u', 'origin', branchName], {
-      cwd: repoPath, encoding: 'utf8',
+      cwd: worktreePath, encoding: 'utf8',
     })
-    if (pushResult.status !== 0) {
-      throw new Error(pushResult.stderr)
-    }
+    if (pushResult.status !== 0) throw new Error(pushResult.stderr)
 
     // Update work item with branch
     wi.branch = branchName
     await saveWorkItem(wi, repoPath)
-
-    // Return to previous branch
-    const currentBranchResult = spawnSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-      cwd: repoPath, encoding: 'utf8',
-    })
-    // Go back to whatever branch we were on before
-    spawnSync('git', ['checkout', '-'], { cwd: repoPath })
 
     console.log()
     success(`${id} pushed to GitHub`)
@@ -182,17 +162,55 @@ async function pushTodo(idArg: string | undefined, repoPath: string): Promise<vo
     console.log(`  Branch: ${chalk.cyan(branchName)}`)
     console.log(`  Spec:   docs/specs/${id}.md`)
     console.log(chalk.dim(`\n  GitHub branch list now shows this as a planned item.`))
+    console.log(chalk.dim(`  Spec auto-syncs when updated. Manual sync: babel todo push ${id}`))
     console.log(chalk.dim(`  When ready: babel start ${id}\n`))
 
   } catch (err) {
-    // Try to restore branch state
-    spawnSync('git', ['checkout', '-'], { cwd: repoPath })
     error(`Could not push todo branch: ${(err as Error).message}`)
     process.exit(1)
   } finally {
-    if (stashed) {
-      spawnSync('git', ['stash', 'pop'], { cwd: repoPath })
+    spawnSync('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+  }
+}
+
+async function syncSpecWorktree(repoPath: string, id: string, branchName: string): Promise<void> {
+  const worktreePath = path.join(repoPath, '.babel', `spec-sync-${id}`)
+  try {
+    spawnSync('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
+    const addResult = spawnSync('git', ['worktree', 'add', '--force', worktreePath, branchName], {
+      cwd: repoPath, encoding: 'utf8',
+    })
+    if (addResult.status !== 0) {
+      // Try with origin/branch if local doesn't exist
+      const addRemote = spawnSync('git', ['worktree', 'add', '--force', '-b', branchName, worktreePath, `origin/${branchName}`], {
+        cwd: repoPath, encoding: 'utf8',
+      })
+      if (addRemote.status !== 0) throw new Error(addRemote.stderr)
     }
+
+    const specsDir = path.join(worktreePath, 'docs', 'specs')
+    fs.mkdirSync(specsDir, { recursive: true })
+    const specDest = path.join(specsDir, `${id}.md`)
+    const notesPath = path.join(repoPath, '.babel', 'notes', `${id}.md`)
+    if (fs.existsSync(notesPath)) fs.copyFileSync(notesPath, specDest)
+
+    spawnSync('git', ['add', specDest], { cwd: worktreePath })
+    const diff = spawnSync('git', ['diff', '--cached', '--quiet'], { cwd: worktreePath })
+    if (diff.status === 0) {
+      info(`Spec for ${id} is already up to date.`)
+      return
+    }
+
+    spawnSync('git', ['commit', '-m', `spec(${id}): sync`], { cwd: worktreePath })
+    const pushResult = spawnSync('git', ['push', 'origin', branchName], { cwd: worktreePath, encoding: 'utf8' })
+    if (pushResult.status !== 0) throw new Error(pushResult.stderr)
+
+    console.log()
+    success(`Spec for ${id} synced to GitHub`)
+    console.log(chalk.dim(`  Branch: ${branchName}`))
+    console.log(chalk.dim(`  File:   docs/specs/${id}.md\n`))
+  } finally {
+    spawnSync('git', ['worktree', 'remove', '--force', worktreePath], { cwd: repoPath })
   }
 }
 
