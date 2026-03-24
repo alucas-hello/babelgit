@@ -41,6 +41,15 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
 
   const caller = detectCallerType()
 
+  if (caller === 'agent' && verdict === 'ship') {
+    error(
+      'Agents cannot declare a ship verdict.',
+      'A human must review the work and call: babel ship "what makes this ready"',
+      'This restriction exists to ensure a human signs off before any PR is opened or merge happens.'
+    )
+    process.exit(1)
+  }
+
   if (caller === 'agent' && !notes) {
     error(
       'Agents must provide notes when calling a verdict.',
