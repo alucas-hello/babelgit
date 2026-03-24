@@ -288,10 +288,17 @@ class HistoryProvider {
         const collapsible = (isTodo || isPaused)
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed;
-        const node = new TreeNode(wi.id, 'historyGroup', collapsible, wi.description);
+        const isDraft = wi.id.startsWith('DRAFT-');
+        const displayId = isDraft ? `⏳ ${wi.id}` : wi.id;
+        const node = new TreeNode(displayId, 'historyGroup', collapsible, wi.description);
         node.description = wi.description;
         const meta = BUCKET_META[stage] ?? { icon: 'circle-outline', color: 'foreground' };
-        node.iconPath = new vscode.ThemeIcon(meta.icon, new vscode.ThemeColor(meta.color));
+        node.iconPath = isDraft
+            ? new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.yellow'))
+            : new vscode.ThemeIcon(meta.icon, new vscode.ThemeColor(meta.color));
+        if (isDraft) {
+            node.tooltip = 'Pending ID reservation — will be assigned a permanent WI number when online';
+        }
         // Make the WI node itself open the spec notes file on click
         if (workspacePath) {
             const notesPath = `${workspacePath}/.babel/notes/${wi.id}.md`;
@@ -299,29 +306,38 @@ class HistoryProvider {
         }
         const children = [];
         if (isTodo) {
-            const startNode = new TreeNode('Start work', 'action', vscode.TreeItemCollapsibleState.None);
-            startNode.iconPath = new vscode.ThemeIcon('debug-start', new vscode.ThemeColor('charts.green'));
-            startNode.command = { command: 'babelgit.startItem', title: 'Start', arguments: [wi.id] };
-            children.push(startNode);
-            if (!wi.branch) {
-                // Not yet pushed — show push button
-                const pushNode = new TreeNode('Push spec to GitHub', 'action', vscode.TreeItemCollapsibleState.None);
-                pushNode.iconPath = new vscode.ThemeIcon('cloud-upload');
-                pushNode.command = { command: 'babelgit.todoPush', title: 'Push to GitHub', arguments: [wi.id] };
-                children.push(pushNode);
+            if (isDraft) {
+                // Can't start or push until we have a real ID
+                const waitNode = new TreeNode('Waiting for ID reservation…', 'label', vscode.TreeItemCollapsibleState.None);
+                waitNode.iconPath = new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.yellow'));
+                waitNode.tooltip = 'The watcher will claim a permanent WI number when connectivity is restored.';
+                children.push(waitNode);
             }
             else {
-                // Already pushed — show sync button + GitHub link
-                const syncNode = new TreeNode('Sync spec', 'action', vscode.TreeItemCollapsibleState.None);
-                syncNode.iconPath = new vscode.ThemeIcon('sync');
-                syncNode.command = { command: 'babelgit.todoPush', title: 'Sync spec', arguments: [wi.id] };
-                children.push(syncNode);
-                if (githubBaseUrl) {
-                    const ghUrl = `${githubBaseUrl}/tree/${wi.branch}`;
-                    const ghNode = new TreeNode('View on GitHub', 'action', vscode.TreeItemCollapsibleState.None);
-                    ghNode.iconPath = new vscode.ThemeIcon('link-external');
-                    ghNode.command = { command: 'vscode.open', title: 'View on GitHub', arguments: [vscode.Uri.parse(ghUrl)] };
-                    children.push(ghNode);
+                const startNode = new TreeNode('Start work', 'action', vscode.TreeItemCollapsibleState.None);
+                startNode.iconPath = new vscode.ThemeIcon('debug-start', new vscode.ThemeColor('charts.green'));
+                startNode.command = { command: 'babelgit.startItem', title: 'Start', arguments: [wi.id] };
+                children.push(startNode);
+                if (!wi.branch) {
+                    // Not yet pushed — show push button
+                    const pushNode = new TreeNode('Push spec to GitHub', 'action', vscode.TreeItemCollapsibleState.None);
+                    pushNode.iconPath = new vscode.ThemeIcon('cloud-upload');
+                    pushNode.command = { command: 'babelgit.todoPush', title: 'Push to GitHub', arguments: [wi.id] };
+                    children.push(pushNode);
+                }
+                else {
+                    // Already pushed — show sync button + GitHub link
+                    const syncNode = new TreeNode('Sync spec', 'action', vscode.TreeItemCollapsibleState.None);
+                    syncNode.iconPath = new vscode.ThemeIcon('sync');
+                    syncNode.command = { command: 'babelgit.todoPush', title: 'Sync spec', arguments: [wi.id] };
+                    children.push(syncNode);
+                    if (githubBaseUrl) {
+                        const ghUrl = `${githubBaseUrl}/tree/${wi.branch}`;
+                        const ghNode = new TreeNode('View on GitHub', 'action', vscode.TreeItemCollapsibleState.None);
+                        ghNode.iconPath = new vscode.ThemeIcon('link-external');
+                        ghNode.command = { command: 'vscode.open', title: 'View on GitHub', arguments: [vscode.Uri.parse(ghUrl)] };
+                        children.push(ghNode);
+                    }
                 }
             }
         }

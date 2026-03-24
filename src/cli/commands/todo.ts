@@ -2,9 +2,10 @@ import * as fs from 'fs'
 import * as path from 'path'
 import { spawnSync } from 'child_process'
 import { loadConfig } from '../../core/config.js'
-import { loadState, saveState, getNextLocalId, saveWorkItem } from '../../core/state.js'
+import { loadState, saveState, saveWorkItem } from '../../core/state.js'
 import { getUserEmail, fetchOrigin } from '../../core/git.js'
 import { buildBranchName, isWorkItemId } from '../../core/workitem.js'
+import { reserveWorkItemId } from '../../core/reservation.js'
 import { error, success, info } from '../display.js'
 import chalk from 'chalk'
 import type { WorkItem } from '../../types.js'
@@ -39,7 +40,8 @@ async function createTodo(description: string | undefined, repoPath: string): Pr
   }
 
   description = description.trim()
-  const id = await getNextLocalId(repoPath)
+  const reservation = await reserveWorkItemId(description, config, repoPath)
+  const id = reservation.id
   const userEmail = await getUserEmail(repoPath)
   const now = new Date().toISOString()
 
@@ -47,6 +49,7 @@ async function createTodo(description: string | undefined, repoPath: string): Pr
     id,
     description,
     stage: 'todo',
+    branch: reservation.branch ?? undefined,
     created_at: now,
     planned_at: now,
     created_by: userEmail,
@@ -63,10 +66,18 @@ async function createTodo(description: string | undefined, repoPath: string): Pr
   }
 
   console.log()
-  success(`Todo created: ${id}`)
-  console.log()
-  console.log(`  ${id}: ${description}`)
-  console.log(chalk.dim(`  Stage: todo — no branch yet`))
+  if (reservation.isDraft) {
+    success(`Todo created: ${id} ${chalk.yellow('(draft — pending reservation)')}`)
+    console.log()
+    console.log(`  ${id}: ${description}`)
+    console.log(chalk.yellow(`  Offline or no remote — ID is temporary.`))
+    console.log(chalk.dim(`  When back online, the watcher will claim a permanent WI number.`))
+  } else {
+    success(`Todo created: ${id}`)
+    console.log()
+    console.log(`  ${id}: ${description}`)
+    console.log(chalk.dim(`  Branch reserved on GitHub: ${reservation.branch}`))
+  }
   console.log()
   console.log(chalk.dim(`  When ready to start: babel start ${id}`))
   console.log(chalk.dim(`  Push spec to GitHub: babel todo push ${id}`))
