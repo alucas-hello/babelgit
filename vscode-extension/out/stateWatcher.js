@@ -145,6 +145,11 @@ class StateWatcher {
             return [];
         }
     }
+    get isInitialized() {
+        if (!this.workspaceRoot)
+            return false;
+        return fs.existsSync(path.join(this.workspaceRoot, '.babel', 'state.json'));
+    }
     get currentWorkItem() {
         if (!this._currentState?.current_work_item_id)
             return null;

@@ -62,7 +62,10 @@ function activate(context) {
         }
         catch { /* shown in output channel */ }
     });
-    context.subscriptions.push(outputChannel, watcher, statusBar, cmd('babelgit.start', async () => {
+    context.subscriptions.push(outputChannel, watcher, statusBar, cmd('babelgit.init', async () => {
+        await runner.run(['init']);
+        refreshAll();
+    }), cmd('babelgit.start', async () => {
         const desc = await vscode.window.showInputBox({
             prompt: 'What are you working on?',
             placeHolder: 'fix login timeout on mobile',

@@ -299,6 +299,13 @@ export class ActionsProvider implements vscode.TreeDataProvider<TreeNode> {
   getChildren(element?: TreeNode): TreeNode[] {
     if (element) return element.children ?? []
 
+    if (!this.watcher.isInitialized) {
+      const node = new TreeNode('Initialize babel in this folder', 'action', vscode.TreeItemCollapsibleState.None)
+      node.iconPath = new vscode.ThemeIcon('getting-started-setup')
+      node.command = { command: 'babelgit.init', title: 'Initialize babel' }
+      return [node]
+    }
+
     const wi = this.watcher.currentWorkItem
     const hasActive = !!wi
     const isRunSession = wi?.stage === 'run_session_open'
