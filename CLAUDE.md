@@ -41,6 +41,22 @@ docs/build/TECHNICAL-SPEC.md   ← exact specifications
 
 ---
 
+## Agent Inbox — Work Items Started from the Extension
+
+When the user clicks **Start Work** in the VSCode extension, the extension writes `.babel/agent-inbox.json` containing the work item ID, description, and branch. A `UserPromptSubmit` hook (`scripts/agent-inbox-hook.js`) fires before the next message you send and injects a notification into the conversation:
+
+```
+[babelgit] Work item started from VSCode: BBL-XXX — "description"
+Branch: feature/BBL-XXX-...
+Please begin implementation now.
+```
+
+The file is renamed to `agent-inbox.processed.json` after injection so it only fires once.
+
+**What this means for agents:** If you see this notification at the top of a conversation, a work item is waiting. Begin implementation immediately — do not ask the user to repeat themselves.
+
+---
+
 ## Pre-Tool Hook Enforcement (Critical — Read This)
 
 This repository has a Claude Code `PreToolUse` hook installed in `.claude/settings.json`. It runs `babel hook-check-wi` before every `Edit` or `Write` tool call.
