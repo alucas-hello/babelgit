@@ -5,6 +5,7 @@ import { loadState, saveState, getNextLocalId, saveWorkItem, setCurrentWorkItem 
 import { fetchOrigin, checkoutNewBranch, getCurrentBranch, getUserEmail, localBranchExists, remoteExists } from '../../core/git.js'
 import { buildBranchName, isWorkItemId } from '../../core/workitem.js'
 import { detectCallerType, checkNoExistingWorkItem, checkAgentBranchPermission } from '../../core/governance.js'
+import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, hint, info } from '../display.js'
 import type { WorkItem, BabelConfig, BabelState } from '../../types.js'
 
@@ -125,6 +126,14 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
   await saveWorkItem(workItem, repoPath)
   await setCurrentWorkItem(id, repoPath)
 
+  await appendConversationEntry(repoPath, id, {
+    event: 'start',
+    timestamp: now,
+    description,
+    branch: branchName,
+    createdBy: userEmail,
+  })
+
   // Integration callbacks (non-fatal)
   try {
     const { IntegrationManager } = await import('../../integrations/index.js')
@@ -195,6 +204,14 @@ async function startTodoItem(
   wi.branch = branchName
   await saveWorkItem(wi, repoPath)
   await setCurrentWorkItem(wi.id, repoPath)
+
+  await appendConversationEntry(repoPath, wi.id, {
+    event: 'start',
+    timestamp: new Date().toISOString(),
+    description: wi.description,
+    branch: branchName,
+    createdBy: wi.created_by,
+  })
 
   console.log()
   success(`Work item started: ${wi.id}`)

@@ -6,6 +6,7 @@ import { loadState, saveState, saveWorkItem } from '../../core/state.js'
 import { getUserEmail, fetchOrigin } from '../../core/git.js'
 import { buildBranchName, isWorkItemId } from '../../core/workitem.js'
 import { reserveWorkItemId } from '../../core/reservation.js'
+import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, info } from '../display.js'
 import chalk from 'chalk'
 import type { WorkItem } from '../../types.js'
@@ -56,6 +57,13 @@ async function createTodo(description: string | undefined, repoPath: string): Pr
   }
 
   await saveWorkItem(workItem, repoPath)
+
+  await appendConversationEntry(repoPath, id, {
+    event: 'todo',
+    timestamp: now,
+    description,
+    createdBy: userEmail,
+  })
 
   // Create notes/spec file
   const notesDir = path.join(repoPath, '.babel', 'notes')

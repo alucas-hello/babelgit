@@ -135,7 +135,8 @@ program
   .command('history [work-item-id]')
   .description('Show work item history and checkpoints')
   .option('--json', 'Output as JSON')
-  .action(async (workItemId?: string, opts?: { json?: boolean }) => {
+  .option('--log', 'Show conversation log')
+  .action(async (workItemId?: string, opts?: { json?: boolean; log?: boolean }) => {
     await runHistory(workItemId, opts || {})
   })
 

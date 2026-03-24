@@ -4,6 +4,7 @@ import { loadState, saveWorkItem, setCurrentWorkItem, findPausedWorkItems, findW
 import { fetchOrigin, checkoutBranch, pullBranch, localBranchExists, checkoutNewBranch, remoteExists, getUserEmail } from '../../core/git.js'
 import { loadCheckpoints } from '../../core/checkpoint.js'
 import { timeAgoLabel } from '../../core/workitem.js'
+import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, hint } from '../display.js'
 
 export async function runContinue(workItemIdOrDesc?: string, repoPath: string = process.cwd()): Promise<void> {
@@ -88,11 +89,19 @@ export async function runContinue(workItemIdOrDesc?: string, repoPath: string = 
   }
 
   // Update state
+  const pausedNotes = workItem.paused_notes
   workItem.stage = 'in_progress'
   workItem.paused_by = undefined
   workItem.paused_at = undefined
   await saveWorkItem(workItem, repoPath)
   await setCurrentWorkItem(workItem.id, repoPath)
+
+  await appendConversationEntry(repoPath, workItem.id, {
+    event: 'continue',
+    timestamp: new Date().toISOString(),
+    resumedBy: userEmail,
+    pausedNotes,
+  })
 
   // Load checkpoints for context
   const checkpoints = await loadCheckpoints(workItem.id, repoPath)

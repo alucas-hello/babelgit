@@ -21,6 +21,35 @@ function formatTimestamp(iso: string): string {
   return new Date(iso).toISOString().slice(0, 16).replace('T', ' ')
 }
 
+export interface TodoEntry {
+  event: 'todo'
+  timestamp: string
+  description: string
+  createdBy: string
+}
+
+export interface StartEntry {
+  event: 'start'
+  timestamp: string
+  description: string
+  branch: string
+  createdBy: string
+}
+
+export interface PauseEntry {
+  event: 'pause'
+  timestamp: string
+  notes?: string
+  pausedBy: string
+}
+
+export interface ContinueEntry {
+  event: 'continue'
+  timestamp: string
+  resumedBy: string
+  pausedNotes?: string
+}
+
 export interface SaveEntry {
   event: 'save'
   timestamp: string
@@ -43,7 +72,7 @@ export interface VerdictEntry {
   commit: string
 }
 
-export type ConversationEntry = SaveEntry | RunEntry | VerdictEntry
+export type ConversationEntry = TodoEntry | StartEntry | PauseEntry | ContinueEntry | SaveEntry | RunEntry | VerdictEntry
 
 export async function appendConversationEntry(
   repoPath: string,
@@ -58,7 +87,36 @@ export async function appendConversationEntry(
 
   let block: string
 
-  if (entry.event === 'save') {
+  if (entry.event === 'todo') {
+    block = [
+      `## ${formatTimestamp(entry.timestamp)} — Todo`,
+      '',
+      `**Description:** ${scrubSecrets(entry.description)}`,
+      `**Created by:** ${entry.createdBy}`,
+    ].join('\n')
+  } else if (entry.event === 'start') {
+    block = [
+      `## ${formatTimestamp(entry.timestamp)} — Start`,
+      '',
+      `**Description:** ${scrubSecrets(entry.description)}`,
+      `**Branch:** ${entry.branch}`,
+      `**Started by:** ${entry.createdBy}`,
+    ].join('\n')
+  } else if (entry.event === 'pause') {
+    block = [
+      `## ${formatTimestamp(entry.timestamp)} — Pause`,
+      '',
+      entry.notes ? `**Notes:** ${scrubSecrets(entry.notes)}` : null,
+      `**Paused by:** ${entry.pausedBy}`,
+    ].filter(l => l !== null).join('\n')
+  } else if (entry.event === 'continue') {
+    block = [
+      `## ${formatTimestamp(entry.timestamp)} — Continue`,
+      '',
+      `**Resumed by:** ${entry.resumedBy}`,
+      entry.pausedNotes ? `**Previous pause notes:** ${scrubSecrets(entry.pausedNotes)}` : null,
+    ].filter(l => l !== null).join('\n')
+  } else if (entry.event === 'save') {
     const fileList = entry.filesChanged.length > 0
       ? entry.filesChanged.map(f => `- ${f}`).join('\n')
       : '_no file changes_'
