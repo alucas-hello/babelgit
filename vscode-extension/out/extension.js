@@ -159,6 +159,21 @@ function activate(context) {
             return;
         await runner.run(['start', id]);
         refreshAll();
+        // Write agent inbox so the next Claude Code message picks this up
+        const root = watcher.workspacePath;
+        if (root) {
+            const fs = require('fs');
+            const path = require('path');
+            const wi = watcher.state?.work_items[id];
+            const inbox = {
+                work_item_id: id,
+                description: wi?.description ?? '',
+                branch: wi?.branch ?? '',
+                started_at: new Date().toISOString(),
+                source: 'extension',
+            };
+            fs.writeFileSync(path.join(root, '.babel', 'agent-inbox.json'), JSON.stringify(inbox, null, 2));
+        }
     }), cmd('babelgit.todoPush', async (...args) => {
         const id = args[0];
         if (!id)
