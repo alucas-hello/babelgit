@@ -1,3 +1,5 @@
+import * as fs from 'fs'
+import * as path from 'path'
 import { loadConfig } from '../../core/config.js'
 import { getCurrentWorkItem, getWorkItem } from '../../core/state.js'
 import { loadCheckpoints } from '../../core/checkpoint.js'
@@ -7,7 +9,7 @@ import type { Verdict } from '../../types.js'
 
 export async function runHistory(
   workItemId?: string,
-  opts: { json?: boolean } = {},
+  opts: { json?: boolean; log?: boolean } = {},
   repoPath: string = process.cwd()
 ): Promise<void> {
   await loadConfig(repoPath).catch(err => {
@@ -38,6 +40,16 @@ export async function runHistory(
 
   if (opts.json) {
     console.log(JSON.stringify({ work_item: workItem, checkpoints }, null, 2))
+    return
+  }
+
+  if (opts.log) {
+    const logPath = path.join(repoPath, '.babel', 'conversations', `${workItem.id}.md`)
+    if (fs.existsSync(logPath)) {
+      console.log(fs.readFileSync(logPath, 'utf8'))
+    } else {
+      info(`No conversation log for ${workItem.id}.`)
+    }
     return
   }
 

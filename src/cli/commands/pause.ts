@@ -2,6 +2,7 @@ import { loadConfig } from '../../core/config.js'
 import { getCurrentWorkItem, saveWorkItem, setCurrentWorkItem } from '../../core/state.js'
 import { addAll, commit, push, hasUncommittedChanges, getUserEmail } from '../../core/git.js'
 import { detectCallerType, checkPauseRequirement } from '../../core/governance.js'
+import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, hint } from '../display.js'
 
 export async function runPause(notes?: string, repoPath: string = process.cwd()): Promise<void> {
@@ -60,6 +61,13 @@ export async function runPause(notes?: string, repoPath: string = process.cwd())
 
   await saveWorkItem(workItem, repoPath)
   await setCurrentWorkItem(undefined, repoPath)
+
+  await appendConversationEntry(repoPath, workItem.id, {
+    event: 'pause',
+    timestamp: now,
+    notes,
+    pausedBy: userEmail,
+  })
 
   // Integration callbacks (non-fatal)
   try {
