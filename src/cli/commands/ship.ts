@@ -86,7 +86,7 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
     return
   }
 
-  const workBranch = workItem.branch
+  const workBranch = workItem.branch!
 
   try {
     await fetchOrigin(repoPath)

@@ -200,7 +200,7 @@ function buildHtml(wi, lockedCommit, diffStat) {
 
 <section>
   <h1>${esc(wi.id)} — ${esc(wi.description)}</h1>
-  <div class="meta">Branch: <code>${esc(wi.branch)}</code> · Locked at: <code>${esc(lockedCommit)}</code></div>
+  <div class="meta">Branch: <code>${esc(wi.branch ?? '—')}</code> · Locked at: <code>${esc(lockedCommit)}</code></div>
 </section>
 
 <section>

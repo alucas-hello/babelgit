@@ -20,6 +20,7 @@ import { runConfigShow, runConfigValidate } from './commands/config.js'
 import { runDiag } from './commands/diag.js'
 import { runEnforce } from './commands/enforce.js'
 import { runWatch } from './commands/watch.js'
+import { runTodo } from './commands/todo.js'
 
 const program = new Command()
 
@@ -165,6 +166,13 @@ program
   .description('Manage git operation enforcement hooks (on/off/status)')
   .action(async (action?: string) => {
     await runEnforce(action)
+  })
+
+program
+  .command('todo [action] [args...]')
+  .description('Plan a work item without starting a branch (create|push|list)')
+  .action(async (action?: string, args: string[] = []) => {
+    await runTodo(action, args)
   })
 
 program

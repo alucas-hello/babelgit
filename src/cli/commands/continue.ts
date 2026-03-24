@@ -72,18 +72,18 @@ export async function runContinue(workItemIdOrDesc?: string, repoPath: string = 
   }
 
   // Check out the branch
-  const localExists = await localBranchExists(workItem.branch, repoPath).catch(() => false)
-  const remoteExists_ = await remoteExists(workItem.branch, repoPath).catch(() => false)
+  const localExists = await localBranchExists(workItem.branch!, repoPath).catch(() => false)
+  const remoteExists_ = await remoteExists(workItem.branch!, repoPath).catch(() => false)
 
   if (localExists) {
-    await checkoutBranch(workItem.branch, repoPath)
+    await checkoutBranch(workItem.branch!, repoPath)
     if (remoteExists_) {
-      await pullBranch(workItem.branch, repoPath)
+      await pullBranch(workItem.branch!, repoPath)
     }
   } else if (remoteExists_) {
-    await checkoutNewBranch(workItem.branch, `origin/${workItem.branch}`, repoPath)
+    await checkoutNewBranch(workItem.branch!, `origin/${workItem.branch!}`, repoPath)
   } else {
-    error(`Branch '${workItem.branch}' not found locally or on remote.`)
+    error(`Branch '${workItem.branch!}' not found locally or on remote.`)
     process.exit(1)
   }
 
@@ -102,7 +102,7 @@ export async function runContinue(workItemIdOrDesc?: string, repoPath: string = 
   success(`Continuing: ${workItem.id}`)
   console.log()
   console.log(`  "${workItem.description}"`)
-  console.log(`  Branch: ${workItem.branch}`)
+  console.log(`  Branch: ${workItem.branch!}`)
   if (workItem.paused_notes) {
     console.log(`  Paused notes: ${workItem.paused_notes}`)
   }

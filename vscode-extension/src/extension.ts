@@ -137,6 +137,20 @@ export function activate(context: vscode.ExtensionContext): void {
       refreshAll()
     }),
 
+    cmd('babelgit.startItem', async (...args: unknown[]) => {
+      const id = args[0] as string | undefined
+      if (!id) return
+      await runner.run(['start', id])
+      refreshAll()
+    }),
+
+    cmd('babelgit.todoPush', async (...args: unknown[]) => {
+      const id = args[0] as string | undefined
+      if (!id) return
+      await runner.run(['todo', 'push', id])
+      refreshAll()
+    }),
+
     cmd('babelgit.state', () => {
       refreshAll()
       return Promise.resolve()

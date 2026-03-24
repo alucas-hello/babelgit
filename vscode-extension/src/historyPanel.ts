@@ -114,7 +114,7 @@ function indexCheckpoints(checkpoints: CheckpointState[]): Map<string, Checkpoin
 }
 
 function buildHtml(
-  wi: { id: string; description: string; branch: string } | null,
+  wi: { id: string; description: string; branch?: string } | null,
   commits: GitCommit[],
   checkpointsByCommit: Map<string, CheckpointState>,
   checkpoints: CheckpointState[]
@@ -145,7 +145,7 @@ function buildHtml(
     .join('')
 
   const header = wi
-    ? `<div class="header"><strong>${escHtml(wi.id)}</strong> — ${escHtml(wi.description)}<br><small>Branch: ${escHtml(wi.branch)} · ${checkpoints.length} checkpoint(s)</small></div>`
+    ? `<div class="header"><strong>${escHtml(wi.id)}</strong> — ${escHtml(wi.description)}<br><small>Branch: ${escHtml(wi.branch ?? '—')} · ${checkpoints.length} checkpoint(s)</small></div>`
     : '<div class="header">No active work item</div>'
 
   return `<!DOCTYPE html>

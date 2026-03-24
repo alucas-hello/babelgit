@@ -1,4 +1,5 @@
 export type WorkflowStage =
+  | 'todo'
   | 'in_progress'
   | 'paused'
   | 'run_session_open'
@@ -12,10 +13,11 @@ export type CallerType = 'human' | 'agent'
 export interface WorkItem {
   id: string
   description: string
-  branch: string
+  branch?: string
   stage: WorkflowStage
   created_at: string
   created_by: string
+  planned_at?: string
   last_checkpoint?: Checkpoint
   paused_by?: string
   paused_at?: string

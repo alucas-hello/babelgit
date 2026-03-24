@@ -67,6 +67,14 @@
         "title": "Babel: Continue"
       },
       {
+        "command": "babelgit.startItem",
+        "title": "Babel: Start Todo Item"
+      },
+      {
+        "command": "babelgit.todoPush",
+        "title": "Babel: Push Todo to GitHub"
+      },
+      {
         "command": "babelgit.openNotes",
         "title": "Babel: Open Work Notes"
       },

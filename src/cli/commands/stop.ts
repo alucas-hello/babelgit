@@ -33,7 +33,7 @@ export async function runStop(reason?: string, repoPath: string = process.cwd())
     console.log()
     console.log(`  This will:`)
     console.log(`    - Abandon work item: ${workItem.id} — "${workItem.description}"`)
-    console.log(`    - Delete branch: ${workItem.branch}`)
+    console.log(`    - Delete branch: ${workItem.branch!}`)
     console.log(`    - Remove it from active work (history is preserved locally)`)
     console.log()
     const { confirm } = await inquirer.prompt([
@@ -70,16 +70,16 @@ export async function runStop(reason?: string, repoPath: string = process.cwd())
 
   // Delete local branch
   try {
-    await deleteLocalBranch(workItem.branch, repoPath)
+    await deleteLocalBranch(workItem.branch!, repoPath)
   } catch {
     // May not exist locally
   }
 
   // Delete remote branch if it exists
   try {
-    const hasRemote = await remoteExists(workItem.branch, repoPath)
+    const hasRemote = await remoteExists(workItem.branch!, repoPath)
     if (hasRemote) {
-      await deleteRemoteBranch(workItem.branch, repoPath)
+      await deleteRemoteBranch(workItem.branch!, repoPath)
     }
   } catch {
     // No remote or branch doesn't exist remotely
