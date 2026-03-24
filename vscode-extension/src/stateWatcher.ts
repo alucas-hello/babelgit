@@ -9,6 +9,7 @@ export interface GitStats {
   deletions: number
   commitsSinceCheckpoint: number
   minutesSinceCheckpoint: number | null
+  lastCommitAt: string | null
 }
 
 export interface WorkItemState {
@@ -160,7 +161,11 @@ export class StateWatcher {
         )
       }
 
-      return { filesChanged, insertions, deletions, commitsSinceCheckpoint, minutesSinceCheckpoint }
+      const lastCommitAt = execSync(
+        'git log -1 --format=%cI HEAD 2>/dev/null || echo ""', opts
+      ).toString().trim() || null
+
+      return { filesChanged, insertions, deletions, commitsSinceCheckpoint, minutesSinceCheckpoint, lastCommitAt }
     } catch {
       return null
     }

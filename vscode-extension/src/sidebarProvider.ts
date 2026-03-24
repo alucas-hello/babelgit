@@ -137,11 +137,15 @@ export class ActiveWorkProvider implements vscode.TreeDataProvider<TreeNode> {
       return [hint, start]
     }
 
+    const stats = this.watcher.gitStats
+    const lastUpdated = stats?.lastCommitAt ? formatAge(stats.lastCommitAt) : null
+
     const nodes = [
       labelNode('ID', wi.id),
       labelNode('Status', formatStage(wi)),
       labelNode('Branch', wi.branch ?? '—'),
       labelNode('Started', formatDate(wi.created_at)),
+      ...(lastUpdated ? [labelNode('Last updated', lastUpdated)] : []),
       labelNode('Description', wi.description),
     ]
 
@@ -151,7 +155,6 @@ export class ActiveWorkProvider implements vscode.TreeDataProvider<TreeNode> {
     pauseNode.command = { command: 'babelgit.pause', title: 'Pause' }
     nodes.push(pauseNode)
 
-    const stats = this.watcher.gitStats
     if (stats) nodes.push(progressNode(stats))
 
     const notes = this.watcher.workNotes

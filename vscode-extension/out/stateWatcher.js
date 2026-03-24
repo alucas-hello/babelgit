@@ -120,7 +120,8 @@ class StateWatcher {
                 commitsSinceCheckpoint = parseInt(count) || 0;
                 minutesSinceCheckpoint = Math.floor((Date.now() - new Date(lastCheckpoint.called_at).getTime()) / 60000);
             }
-            return { filesChanged, insertions, deletions, commitsSinceCheckpoint, minutesSinceCheckpoint };
+            const lastCommitAt = (0, child_process_1.execSync)('git log -1 --format=%cI HEAD 2>/dev/null || echo ""', opts).toString().trim() || null;
+            return { filesChanged, insertions, deletions, commitsSinceCheckpoint, minutesSinceCheckpoint, lastCommitAt };
         }
         catch {
             return null;
