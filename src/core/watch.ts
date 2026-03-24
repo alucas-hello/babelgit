@@ -15,6 +15,8 @@
 import * as fs from 'fs'
 import * as path from 'path'
 import { execSync, spawnSync } from 'child_process'
+import { resolveDrafts } from './reservation.js'
+import { loadConfig } from './config.js'
 
 export type WatchEventType =
   | 'revert'
@@ -42,6 +44,7 @@ export interface WatchStatus {
 const MAX_EVENTS = 200
 const CI_POLL_INTERVAL_MS = 60_000
 const EXTERNAL_COMMIT_POLL_INTERVAL_MS = 30_000
+const DRAFT_RESOLVE_INTERVAL_MS = 30_000
 
 // ─── Daemon entry point ───────────────────────────────────────────────────────
 
@@ -157,6 +160,14 @@ export async function runDaemon(repoPath: string): Promise<void> {
   setInterval(() => {
     try { pollCiStatus(repoPath) } catch { /* ignore */ }
   }, CI_POLL_INTERVAL_MS)
+
+  // Resolve any DRAFT-* work items when connectivity returns
+  setInterval(async () => {
+    try {
+      const config = await loadConfig(repoPath)
+      await resolveDrafts(repoPath, config)
+    } catch { /* non-fatal */ }
+  }, DRAFT_RESOLVE_INTERVAL_MS)
 
   // Keep alive
   await new Promise<void>(() => { /* run forever until signal */ })
