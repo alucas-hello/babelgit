@@ -8,7 +8,8 @@ export function detectCallerType(): CallerType {
     process.env.CLAUDE_CODE ||
     process.env.CURSOR_AGENT ||
     process.env.BABELGIT_AGENT ||
-    process.env.CI
+    process.env.CI ||
+    !process.stdin.isTTY
   ) {
     return 'agent'
   }
