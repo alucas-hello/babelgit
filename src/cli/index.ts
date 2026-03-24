@@ -21,6 +21,7 @@ import { runDiag } from './commands/diag.js'
 import { runEnforce } from './commands/enforce.js'
 import { runWatch } from './commands/watch.js'
 import { runTodo } from './commands/todo.js'
+import { runHookCheckWi, runHookInstall, runHookUninstall } from './commands/hook.js'
 
 const program = new Command()
 
@@ -180,6 +181,29 @@ program
   .description('Manage the file watcher daemon (start|stop|status|install|uninstall)')
   .action(async (action?: string) => {
     await runWatch(action)
+  })
+
+program
+  .command('hook-check-wi')
+  .description('Pre-tool hook: block Edit/Write when no active work item (invoked by Claude Code)')
+  .action(async () => {
+    await runHookCheckWi()
+  })
+
+const hookCmd = program.command('hook').description('Manage Claude Code pre-tool hooks (install|uninstall)')
+
+hookCmd
+  .command('install')
+  .description('Write PreToolUse hook config to .claude/settings.json')
+  .action(async () => {
+    await runHookInstall(process.cwd())
+  })
+
+hookCmd
+  .command('uninstall')
+  .description('Remove PreToolUse hook config from .claude/settings.json')
+  .action(async () => {
+    await runHookUninstall(process.cwd())
   })
 
 program
