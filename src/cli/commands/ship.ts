@@ -12,6 +12,7 @@ import {
   remoteExists,
 } from '../../core/git.js'
 import { checkShipRequirement, detectCallerType } from '../../core/governance.js'
+import { loadCheckpoints } from '../../core/checkpoint.js'
 import { runHooks, hooksFailed } from '../../core/hooks.js'
 import { error, success, hint } from '../display.js'
 
@@ -80,6 +81,19 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
 
   // GitHub PR path (if configured)
   if (config.integrations?.github?.enabled && config.integrations.github.ship_via_pr) {
+    // Unconditional: a ship verdict checkpoint is always required before opening a PR.
+    // This cannot be bypassed by config — a human must explicitly declare it ready.
+    const checkpoints = await loadCheckpoints(workItem.id, repoPath)
+    const hasShipVerdict = checkpoints.some(c => c.verdict === 'ship' && c.is_recovery_anchor)
+    if (!hasShipVerdict) {
+      error(
+        'No ship verdict — PR blocked.',
+        `A developer must explicitly declare this ready before a PR can be opened.`,
+        `Run 'babel run' then 'babel ship "what makes this ready"' to declare it.`
+      )
+      process.exit(1)
+    }
+
     const tokenEnv = config.integrations.github.token_env || 'GITHUB_TOKEN'
     if (!process.env[tokenEnv]) {
       error(
