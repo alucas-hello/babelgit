@@ -213,6 +213,8 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
     const groups = this.watcher.allCheckpointGroups
     const verdicts = this.watcher.verdicts
     const remote = this.watcher.remoteBranches
+    const githubBaseUrl = this.watcher.githubBaseUrl
+    const workspacePath = this.watcher.workspacePath
 
     if (!state && groups.length === 0 && remote.length === 0) {
       const hint = new TreeNode('No work items yet', 'hint', vscode.TreeItemCollapsibleState.None)
@@ -274,7 +276,7 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
       // Your own items
       for (const wi of items) {
         const group = groups.find(g => g.workItemId === wi.id)
-        children.push(this.buildWINode(wi, group, stage, verdicts))
+        children.push(this.buildWINode(wi, group, stage, verdicts, githubBaseUrl, workspacePath))
       }
 
       // Teammate items (remote branches not in local state)
@@ -297,7 +299,9 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
     wi: WorkItemState,
     group: CheckpointGroup | undefined,
     stage: string,
-    verdicts: { keep: string; refine: string; reject: string; ship: string }
+    verdicts: { keep: string; refine: string; reject: string; ship: string },
+    githubBaseUrl: string | null,
+    workspacePath: string | undefined
   ): TreeNode {
     const isTodo = stage === 'todo'
     const isPaused = stage === 'paused'
@@ -311,6 +315,12 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
     const meta = BUCKET_META[stage] ?? { icon: 'circle-outline', color: 'foreground' }
     node.iconPath = new vscode.ThemeIcon(meta.icon, new vscode.ThemeColor(meta.color))
 
+    // Make the WI node itself open the spec notes file on click
+    if (workspacePath) {
+      const notesPath = `${workspacePath}/.babel/notes/${wi.id}.md`
+      node.command = { command: 'babelgit.openNotes', title: 'Open spec', arguments: [notesPath] }
+    }
+
     const children: TreeNode[] = []
 
     if (isTodo) {
@@ -319,16 +329,26 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
       startNode.command = { command: 'babelgit.startItem', title: 'Start', arguments: [wi.id] }
       children.push(startNode)
 
-      const pushNode = new TreeNode('Push spec to GitHub', 'action', vscode.TreeItemCollapsibleState.None)
-      pushNode.iconPath = new vscode.ThemeIcon('cloud-upload')
-      pushNode.command = { command: 'babelgit.todoPush', title: 'Push to GitHub', arguments: [wi.id] }
-      children.push(pushNode)
+      if (!wi.branch) {
+        // Not yet pushed — show push button
+        const pushNode = new TreeNode('Push spec to GitHub', 'action', vscode.TreeItemCollapsibleState.None)
+        pushNode.iconPath = new vscode.ThemeIcon('cloud-upload')
+        pushNode.command = { command: 'babelgit.todoPush', title: 'Push to GitHub', arguments: [wi.id] }
+        children.push(pushNode)
+      } else {
+        // Already pushed — show sync button + GitHub link
+        const syncNode = new TreeNode('Sync spec', 'action', vscode.TreeItemCollapsibleState.None)
+        syncNode.iconPath = new vscode.ThemeIcon('sync')
+        syncNode.command = { command: 'babelgit.todoPush', title: 'Sync spec', arguments: [wi.id] }
+        children.push(syncNode)
 
-      if (wi.branch) {
-        const branchNode = new TreeNode(wi.branch, 'label', vscode.TreeItemCollapsibleState.None)
-        branchNode.iconPath = new vscode.ThemeIcon('source-control')
-        branchNode.description = 'pushed'
-        children.push(branchNode)
+        if (githubBaseUrl) {
+          const ghUrl = `${githubBaseUrl}/tree/${wi.branch}`
+          const ghNode = new TreeNode('View on GitHub', 'action', vscode.TreeItemCollapsibleState.None)
+          ghNode.iconPath = new vscode.ThemeIcon('link-external')
+          ghNode.command = { command: 'vscode.open', title: 'View on GitHub', arguments: [vscode.Uri.parse(ghUrl)] }
+          children.push(ghNode)
+        }
       }
     }
 

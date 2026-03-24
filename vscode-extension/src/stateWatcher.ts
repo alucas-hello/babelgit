@@ -259,6 +259,18 @@ export class StateWatcher {
     return this.workspaceRoot
   }
 
+  get githubBaseUrl(): string | null {
+    if (!this.workspaceRoot) return null
+    try {
+      const remote = execSync('git remote get-url origin 2>/dev/null || echo ""', {
+        cwd: this.workspaceRoot, encoding: 'utf8', shell: '/bin/sh',
+      }).trim()
+      const match = remote.match(/github\.com[:/]([^/]+\/[^/.]+?)(?:\.git)?$/)
+      if (!match) return null
+      return `https://github.com/${match[1]}`
+    } catch { return null }
+  }
+
   get verdicts(): BabelVerdicts {
     return this._verdicts ?? { keep: 'keep', refine: 'refine', reject: 'reject', ship: 'ship' }
   }
