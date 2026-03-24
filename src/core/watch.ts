@@ -22,6 +22,7 @@ export type WatchEventType =
   | 'revert'
   | 'ci_failure'
   | 'external_commit'
+  | 'auto_save'
   | 'started'
   | 'stopped'
   | 'error'
@@ -45,6 +46,8 @@ const MAX_EVENTS = 200
 const CI_POLL_INTERVAL_MS = 60_000
 const EXTERNAL_COMMIT_POLL_INTERVAL_MS = 30_000
 const DRAFT_RESOLVE_INTERVAL_MS = 30_000
+const AUTO_SAVE_INTERVAL_MS = 60_000          // check every minute
+const AUTO_SAVE_INACTIVITY_THRESHOLD_MS = 5 * 60_000  // save after 5min of no commits
 
 // ─── Daemon entry point ───────────────────────────────────────────────────────
 
@@ -168,6 +171,11 @@ export async function runDaemon(repoPath: string): Promise<void> {
       await resolveDrafts(repoPath, config)
     } catch { /* non-fatal */ }
   }, DRAFT_RESOLVE_INTERVAL_MS)
+
+  // Auto-save uncommitted changes on feature branch after inactivity
+  setInterval(() => {
+    try { autoSaveIfNeeded(repoPath) } catch { /* non-fatal */ }
+  }, AUTO_SAVE_INTERVAL_MS)
 
   // Keep alive
   await new Promise<void>(() => { /* run forever until signal */ })
@@ -337,6 +345,51 @@ export function getWatchStatus(repoPath: string): { running: boolean; pid?: numb
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// ─── Auto-save ────────────────────────────────────────────────────────────────
+
+function autoSaveIfNeeded(repoPath: string): void {
+  // Only run when there's an active work item in in_progress stage
+  const stateFile = path.join(repoPath, '.babel', 'state.json')
+  if (!fs.existsSync(stateFile)) return
+  let state: any
+  try { state = JSON.parse(fs.readFileSync(stateFile, 'utf8')) } catch { return }
+
+  const currentId = state.current_work_item_id
+  if (!currentId) return
+  const wi = state.work_items?.[currentId]
+  if (!wi || wi.stage !== 'in_progress') return
+
+  // Check for uncommitted changes (staged or unstaged)
+  const status = spawnSync('git', ['status', '--porcelain'], { cwd: repoPath, encoding: 'utf8' })
+  if (!status.stdout.trim()) return // nothing to save
+
+  // Check time since last commit — only auto-save after inactivity threshold
+  const lastCommitTime = spawnSync(
+    'git', ['log', '-1', '--format=%ct'],
+    { cwd: repoPath, encoding: 'utf8' }
+  )
+  const lastCommitSecs = parseInt(lastCommitTime.stdout.trim())
+  if (isNaN(lastCommitSecs)) return
+  const msSinceCommit = Date.now() - lastCommitSecs * 1000
+  if (msSinceCommit < AUTO_SAVE_INACTIVITY_THRESHOLD_MS) return
+
+  // Auto-save
+  spawnSync('git', ['add', '-A'], { cwd: repoPath })
+  const commitResult = spawnSync(
+    'git', ['commit', '-m', `auto-save(${currentId}): uncommitted changes preserved by watcher`],
+    { cwd: repoPath, encoding: 'utf8' }
+  )
+  if (commitResult.status === 0) {
+    const event: WatchEvent = {
+      type: 'auto_save',
+      message: `Auto-saved uncommitted changes for ${currentId} after inactivity`,
+      timestamp: new Date().toISOString(),
+    }
+    appendEvent(repoPath, event)
+    updateStatusLastCheck(repoPath, event)
+  }
 }
 
 // ─── Spec sync ────────────────────────────────────────────────────────────────

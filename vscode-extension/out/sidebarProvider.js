@@ -485,7 +485,7 @@ class WatcherProvider {
         // Recent alert events
         const events = this.watcher.watchEvents;
         const alerts = events
-            .filter((e) => ['revert', 'ci_failure', 'external_commit', 'error'].includes(e.type))
+            .filter((e) => ['revert', 'ci_failure', 'external_commit', 'auto_save', 'error'].includes(e.type))
             .slice(-5)
             .reverse();
         if (alerts.length > 0) {
@@ -496,12 +496,14 @@ class WatcherProvider {
                     revert: 'warning',
                     ci_failure: 'error',
                     external_commit: 'arrow-down',
+                    auto_save: 'save',
                     error: 'bug',
                 };
                 const colors = {
                     revert: 'list.warningForeground',
                     ci_failure: 'list.errorForeground',
                     external_commit: 'charts.blue',
+                    auto_save: 'charts.green',
                     error: 'list.errorForeground',
                 };
                 const node = new TreeNode(ev.message, 'watchEvent', vscode.TreeItemCollapsibleState.None);
