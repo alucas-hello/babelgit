@@ -169,7 +169,7 @@ program
 
 program
   .command('watch [action]')
-  .description('Manage the file watcher daemon (start/stop/status)')
+  .description('Manage the file watcher daemon (start|stop|status|install|uninstall)')
   .action(async (action?: string) => {
     await runWatch(action)
   })
