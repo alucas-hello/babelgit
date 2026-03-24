@@ -80,6 +80,15 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
 
   // GitHub PR path (if configured)
   if (config.integrations?.github?.enabled && config.integrations.github.ship_via_pr) {
+    const tokenEnv = config.integrations.github.token_env || 'GITHUB_TOKEN'
+    if (!process.env[tokenEnv]) {
+      error(
+        `GitHub token not set — cannot open PR.`,
+        `ship_via_pr requires ${tokenEnv} to be set in your environment.`,
+        `Set the variable and retry: export ${tokenEnv}=your_token`
+      )
+      process.exit(1)
+    }
     const { IntegrationManager } = await import('../../integrations/index.js')
     const mgr = new IntegrationManager(config, repoPath)
     const prFields = await mgr.onShip(workItem)

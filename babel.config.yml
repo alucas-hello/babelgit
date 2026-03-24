@@ -29,3 +29,8 @@ verdicts:
 hooks:
   before_ship:
     - npm run build
+integrations:
+  github:
+    enabled: true
+    token_env: GITHUB_TOKEN
+    ship_via_pr: true
