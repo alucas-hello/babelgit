@@ -225,10 +225,14 @@ class HistoryProvider {
         const remote = this.watcher.remoteBranches;
         const githubBaseUrl = this.watcher.githubBaseUrl;
         const workspacePath = this.watcher.workspacePath;
+        const boardNode = new TreeNode('Open Board', 'action', vscode.TreeItemCollapsibleState.None);
+        boardNode.iconPath = new vscode.ThemeIcon('table');
+        boardNode.command = { command: 'babelgit.board', title: 'Open Board' };
+        boardNode.tooltip = 'Open the full Kanban board view';
         if (!state && groups.length === 0 && remote.length === 0) {
             const hint = new TreeNode('No work items yet', 'hint', vscode.TreeItemCollapsibleState.None);
             hint.iconPath = new vscode.ThemeIcon('info');
-            return [hint];
+            return [boardNode, hint];
         }
         const workItems = Object.values(state?.work_items ?? {});
         // Group items by stage
@@ -291,7 +295,7 @@ class HistoryProvider {
             bucket.children = children;
             buckets.push(bucket);
         }
-        return buckets;
+        return [boardNode, ...buckets];
     }
     buildWINode(wi, group, stage, verdicts, githubBaseUrl, workspacePath, currentWorkItemId) {
         const isTodo = stage === 'todo';
