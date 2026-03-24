@@ -33,6 +33,11 @@ export function activate(context: vscode.ExtensionContext): void {
     watcher,
     statusBar,
 
+    cmd('babelgit.init', async () => {
+      await runner.run(['init'])
+      refreshAll()
+    }),
+
     cmd('babelgit.start', async () => {
       const desc = await vscode.window.showInputBox({
         prompt: 'What are you working on?',
