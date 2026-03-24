@@ -89,6 +89,14 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
       )
       process.exit(1)
     }
+    // Push feature branch to remote so GitHub can see the commits
+    try {
+      await push(workItem.branch!, repoPath)
+    } catch (pushErr) {
+      error('Failed to push branch to remote.', (pushErr as Error).message)
+      process.exit(1)
+    }
+
     const { IntegrationManager } = await import('../../integrations/index.js')
     const mgr = new IntegrationManager(config, repoPath)
     const prFields = await mgr.onShip(workItem)
@@ -104,10 +112,13 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
       console.log(`\n  PR: ${prFields.pr_url}`)
       console.log(`  Merge when approved — branch stays until then.\n`)
     } else {
-      // auto_merge: true — fully shipped
-      workItem.stage = 'shipped'
-      await saveWorkItem(workItem, repoPath)
-      await setCurrentWorkItem(undefined, repoPath)
+      // PR creation failed — branch is pushed but no PR was opened
+      error(
+        'GitHub PR creation failed.',
+        'The branch was pushed but no PR was opened.',
+        `Create it manually or check your token permissions: https://github.com`
+      )
+      process.exit(1)
     }
     return
   }
