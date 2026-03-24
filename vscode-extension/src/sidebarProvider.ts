@@ -189,6 +189,7 @@ const BUCKET_META: Record<string, BucketMeta> = {
   in_progress:      { icon: 'circle-filled',     color: 'charts.blue',   expanded: true  },
   ship_ready:       { icon: 'git-merge',         color: 'charts.green',  expanded: true  },
   pr_open:          { icon: 'git-pull-request',  color: 'charts.purple', expanded: true  },
+  merged:           { icon: 'git-merge',         color: 'charts.green',  expanded: true  },
   run_session_open: { icon: 'circle-filled',     color: 'charts.yellow', expanded: true  },
   paused:           { icon: 'debug-pause',       color: 'charts.orange', expanded: true  },
   shipped:          { icon: 'pass',              color: 'charts.green',  expanded: false },
@@ -234,7 +235,7 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     // Ordered bucket stages
-    const stageOrder: string[] = ['todo', 'in_progress', 'ship_ready', 'pr_open', 'run_session_open', 'paused', 'shipped', 'stopped']
+    const stageOrder: string[] = ['todo', 'in_progress', 'ship_ready', 'pr_open', 'merged', 'run_session_open', 'paused', 'shipped', 'stopped']
 
     // Label for shipped bucket uses config's verdicts.ship value
     const shipLabel = capitalize(verdicts.ship)
@@ -244,6 +245,7 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
       in_progress:      'In Progress',
       ship_ready:       'Ready to Merge',
       pr_open:          'PR Open',
+      merged:           'Merged',
       run_session_open: 'Review Open',
       paused:           'Paused',
       shipped:          shipLabel,

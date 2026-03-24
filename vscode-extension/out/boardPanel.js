@@ -84,6 +84,7 @@ function buildColumns(workItems, verdicts) {
         { stage: 'run_session_open', label: 'Review Open', color: '#3d2e00', borderColor: '#ff9800' },
         { stage: 'paused', label: 'Paused', color: '#3d2a00', borderColor: '#ff9800' },
         { stage: 'pr_open', label: 'PR Open', color: '#2e1f4a', borderColor: '#9c27b0' },
+        { stage: 'merged', label: 'Merged', color: '#1a3a1a', borderColor: '#66bb6a' },
         { stage: 'shipped', label: shipLabel, color: '#1a2e35', borderColor: '#00bcd4' },
         { stage: 'stopped', label: 'Stopped', color: '#2e1e1e', borderColor: '#f44336' },
     ];
