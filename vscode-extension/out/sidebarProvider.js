@@ -197,6 +197,7 @@ exports.ActiveWorkProvider = ActiveWorkProvider;
 const BUCKET_META = {
     todo: { icon: 'circle-outline', color: 'charts.blue', expanded: true },
     in_progress: { icon: 'circle-filled', color: 'charts.blue', expanded: true },
+    ship_ready: { icon: 'git-merge', color: 'charts.green', expanded: true },
     run_session_open: { icon: 'circle-filled', color: 'charts.yellow', expanded: true },
     paused: { icon: 'debug-pause', color: 'charts.orange', expanded: true },
     shipped: { icon: 'pass', color: 'charts.green', expanded: false },
@@ -236,18 +237,24 @@ class HistoryProvider {
             byStage[wi.stage].push(wi);
         }
         // Ordered bucket stages
-        const stageOrder = ['todo', 'in_progress', 'run_session_open', 'paused', 'shipped', 'stopped'];
+        const stageOrder = ['todo', 'in_progress', 'ship_ready', 'run_session_open', 'paused', 'shipped', 'stopped'];
         // Label for shipped bucket uses config's verdicts.ship value
         const shipLabel = capitalize(verdicts.ship);
         const stageLabelMap = {
             todo: 'Todo',
             in_progress: 'In Progress',
+            ship_ready: 'Ready to Merge',
             run_session_open: 'Review Open',
             paused: 'Paused',
             shipped: shipLabel,
             stopped: 'Stopped',
         };
         const buckets = [];
+        // Separate ship_ready items out of in_progress for their own bucket
+        const shipReadyItems = (byStage['in_progress'] ?? []).filter(w => w.ship_ready);
+        const inProgressItems = (byStage['in_progress'] ?? []).filter(w => !w.ship_ready);
+        byStage['in_progress'] = inProgressItems;
+        byStage['ship_ready'] = shipReadyItems;
         for (const stage of stageOrder) {
             const items = (byStage[stage] ?? []).sort((a, b) => b.id.localeCompare(a.id));
             const meta = BUCKET_META[stage];
@@ -341,6 +348,13 @@ class HistoryProvider {
                 }
             }
         }
+        if (wi.ship_ready && stage !== 'shipped') {
+            const mergeNode = new TreeNode('Merge to main →', 'action', vscode.TreeItemCollapsibleState.None);
+            mergeNode.iconPath = new vscode.ThemeIcon('git-merge', new vscode.ThemeColor('charts.green'));
+            mergeNode.command = { command: 'babelgit.ship', title: 'Merge to main' };
+            mergeNode.tooltip = 'Ship verdict approved — run babel ship to merge this branch into main';
+            children.push(mergeNode);
+        }
         if (isPaused) {
             const continueNode = new TreeNode('Continue this work', 'action', vscode.TreeItemCollapsibleState.None);
             continueNode.iconPath = new vscode.ThemeIcon('debug-continue', new vscode.ThemeColor('charts.green'));
@@ -404,12 +418,15 @@ class ActionsProvider {
             { label: 'Refine', command: 'babelgit.refine', icon: 'edit', when: !!isRunSession },
             { label: 'Reject', command: 'babelgit.reject', icon: 'discard', when: !!isRunSession },
             { label: 'Ship (verdict)', command: 'babelgit.ship', icon: 'rocket', when: !!isRunSession },
-            { label: 'Ship — deliver now', command: 'babelgit.ship', icon: 'rocket', when: !!isShipReady && !isRunSession },
+            { label: 'Merge to main →', command: 'babelgit.ship', icon: 'git-merge', when: !!isShipReady && !isRunSession },
             { label: 'View history', command: 'babelgit.history', icon: 'history', when: hasActive },
         ];
         return actions.filter(a => a.when).map(a => {
             const node = new TreeNode(a.label, 'action', vscode.TreeItemCollapsibleState.None);
-            node.iconPath = new vscode.ThemeIcon(a.icon);
+            const isMerge = a.command === 'babelgit.ship' && !!isShipReady && !isRunSession;
+            node.iconPath = isMerge
+                ? new vscode.ThemeIcon(a.icon, new vscode.ThemeColor('charts.green'))
+                : new vscode.ThemeIcon(a.icon);
             node.command = { command: a.command, title: a.label };
             return node;
         });
