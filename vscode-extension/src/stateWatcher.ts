@@ -285,12 +285,12 @@ export class StateWatcher {
       const configPath = path.join(this.workspaceRoot, 'babel.config.yml')
       if (!fs.existsSync(configPath)) return null
       const raw = fs.readFileSync(configPath, 'utf8')
-      const match = raw.match(/verdicts:\s*\n(?:[ \t]+\w+:[ \t]*\S+\n?)+/)
-      if (!match) return null
-      const keep    = raw.match(/keep:\s*(\S+)/)?.[1] ?? 'keep'
-      const refine  = raw.match(/refine:\s*(\S+)/)?.[1] ?? 'refine'
-      const reject  = raw.match(/reject:\s*(\S+)/)?.[1] ?? 'reject'
-      const ship    = raw.match(/ship:\s*(\S+)/)?.[1] ?? 'ship'
+      // Extract only the verdicts: block to avoid matching ship:/keep: in other sections
+      const block = raw.match(/^verdicts:\s*\n((?:[ \t]+\S+:[ \t]*\S+\n?)+)/m)?.[1] ?? ''
+      const keep  = block.match(/keep:\s*(\S+)/)?.[1] ?? 'keep'
+      const refine = block.match(/refine:\s*(\S+)/)?.[1] ?? 'refine'
+      const reject = block.match(/reject:\s*(\S+)/)?.[1] ?? 'reject'
+      const ship  = block.match(/ship:\s*(\S+)/)?.[1] ?? 'ship'
       return { keep, refine, reject, ship }
     } catch { return null }
   }
