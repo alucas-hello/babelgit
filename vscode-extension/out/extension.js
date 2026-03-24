@@ -175,8 +175,24 @@ function activate(context) {
             };
             fs.writeFileSync(path.join(root, '.babel', 'agent-inbox.json'), JSON.stringify(inbox, null, 2));
         }
-        // Bring Claude Code panel into focus so the conversation is immediately visible
-        vscode.commands.executeCommand('claude-vscode.sidebar.open').then(undefined, () => { });
+        // Spawn or focus a claude terminal and trigger the UserPromptSubmit hook automatically
+        const TERMINAL_NAME = 'Claude';
+        const existing = vscode.window.terminals.find(t => t.name === TERMINAL_NAME && t.exitStatus === undefined);
+        if (existing) {
+            existing.show();
+            // Small delay to ensure terminal is focused, then send newline to fire hook
+            setTimeout(() => existing.sendText('\n'), 500);
+        }
+        else {
+            const t = vscode.window.createTerminal({
+                name: TERMINAL_NAME,
+                shellPath: 'claude',
+                cwd: watcher.workspacePath ?? undefined,
+            });
+            t.show();
+            // Longer delay for claude to start up before sending trigger
+            setTimeout(() => t.sendText('\n'), 3000);
+        }
     }), cmd('babelgit.todoPush', async (...args) => {
         const id = args[0];
         if (!id)
