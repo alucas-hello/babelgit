@@ -64,11 +64,18 @@
       },
       {
         "command": "babelgit.continueItem",
-        "title": "Babel: Continue"
+        "title": "Babel: Continue",
+        "icon": "$(debug-continue)"
       },
       {
         "command": "babelgit.startItem",
-        "title": "Babel: Start Todo Item"
+        "title": "Babel: Start Todo Item",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "babelgit.deleteItem",
+        "title": "Babel: Trash Work Item",
+        "icon": "$(trash)"
       },
       {
         "command": "babelgit.todoPush",
@@ -122,6 +129,28 @@
       ]
     },
     "menus": {
+      "view/item/context": [
+        {
+          "command": "babelgit.startItem",
+          "when": "view == babelgitHistory && viewItem == wi-todo",
+          "group": "inline@1"
+        },
+        {
+          "command": "babelgit.deleteItem",
+          "when": "view == babelgitHistory && viewItem =~ /^wi-todo/",
+          "group": "inline@2"
+        },
+        {
+          "command": "babelgit.continueItem",
+          "when": "view == babelgitHistory && viewItem == wi-paused",
+          "group": "inline@1"
+        },
+        {
+          "command": "babelgit.deleteItem",
+          "when": "view == babelgitHistory && viewItem == wi-run-stuck",
+          "group": "inline@1"
+        }
+      ],
       "view/title": [
         {
           "command": "babelgit.state",

@@ -295,14 +295,18 @@ class HistoryProvider {
         const isTodo = stage === 'todo';
         const isPaused = stage === 'paused';
         const activeStages = new Set(['in_progress', 'ship_ready', 'run_session_open', 'paused', 'pr_open']);
-        const collapsible = isTodo
-            ? vscode.TreeItemCollapsibleState.None
-            : activeStages.has(stage)
-                ? vscode.TreeItemCollapsibleState.Expanded
-                : vscode.TreeItemCollapsibleState.Collapsed;
+        const collapsible = activeStages.has(stage) || isTodo
+            ? vscode.TreeItemCollapsibleState.Expanded
+            : vscode.TreeItemCollapsibleState.Collapsed;
         const isDraft = wi.id.startsWith('DRAFT-');
         const displayId = isDraft ? `⏳ ${wi.id}` : wi.id;
-        const node = new TreeNode(`${displayId}  ${wi.description}`, 'historyGroup', collapsible);
+        // contextValue drives inline icon buttons via view/item/context menu in package.json
+        const contextValue = isTodo
+            ? (isDraft ? 'wi-todo-draft' : 'wi-todo')
+            : stage === 'paused' ? 'wi-paused'
+                : stage === 'run_session_open' && currentWorkItemId !== wi.id ? 'wi-run-stuck'
+                    : 'wi-other';
+        const node = new TreeNode(displayId, contextValue, collapsible);
         node.tooltip = wi.description;
         const meta = BUCKET_META[stage] ?? { icon: 'circle-outline', color: 'foreground' };
         node.iconPath = isDraft
@@ -311,28 +315,23 @@ class HistoryProvider {
         if (isDraft) {
             node.tooltip = 'Pending ID reservation — will be assigned a permanent WI number when online';
         }
-        // Route click: todo items open their spec file; everything else opens the detail panel
-        if (workspacePath) {
-            if (isTodo) {
-                const notesPath = `${workspacePath}/.babel/notes/${wi.id}.md`;
-                node.command = { command: 'babelgit.openNotes', title: 'Open spec', arguments: [notesPath] };
-            }
-            else {
-                node.command = { command: 'babelgit.openWorkItem', title: 'Open detail', arguments: [wi.id] };
-            }
-        }
         const children = [];
+        // Description as first child — gets full column width, no truncation
+        if (!isDraft) {
+            const descNode = new TreeNode(wi.description, 'descLine', vscode.TreeItemCollapsibleState.None);
+            descNode.tooltip = wi.description;
+            if (workspacePath) {
+                descNode.command = isTodo
+                    ? { command: 'babelgit.openNotes', title: 'Open spec', arguments: [`${workspacePath}/.babel/notes/${wi.id}.md`] }
+                    : { command: 'babelgit.openWorkItem', title: 'Open detail', arguments: [wi.id] };
+            }
+            children.push(descNode);
+        }
         if (isTodo && isDraft) {
             const waitNode = new TreeNode('Waiting for ID reservation…', 'label', vscode.TreeItemCollapsibleState.None);
             waitNode.iconPath = new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.yellow'));
             waitNode.tooltip = 'The watcher will claim a permanent WI number when connectivity is restored.';
             children.push(waitNode);
-        }
-        if (stage === 'run_session_open' && currentWorkItemId !== wi.id) {
-            const trashNode = new TreeNode('Trash', 'action', vscode.TreeItemCollapsibleState.None);
-            trashNode.iconPath = new vscode.ThemeIcon('trash', new vscode.ThemeColor('list.errorForeground'));
-            trashNode.command = { command: 'babelgit.deleteItem', title: 'Trash', arguments: [wi.id] };
-            children.push(trashNode);
         }
         if (stage === 'pr_open' && wi.pr_url) {
             const prNode = new TreeNode('View PR →', 'action', vscode.TreeItemCollapsibleState.None);
@@ -348,16 +347,10 @@ class HistoryProvider {
             mergeNode.tooltip = 'Ship verdict approved — run babel ship to merge this branch into main';
             children.push(mergeNode);
         }
-        if (isPaused) {
-            const continueNode = new TreeNode('Continue this work', 'action', vscode.TreeItemCollapsibleState.None);
-            continueNode.iconPath = new vscode.ThemeIcon('debug-continue', new vscode.ThemeColor('charts.green'));
-            continueNode.command = { command: 'babelgit.continueItem', title: 'Continue', arguments: [wi.id] };
-            children.push(continueNode);
-            if (wi.paused_notes) {
-                const notesNode = new TreeNode(`"${wi.paused_notes}"`, 'label', vscode.TreeItemCollapsibleState.None);
-                notesNode.iconPath = new vscode.ThemeIcon('comment');
-                children.push(notesNode);
-            }
+        if (isPaused && wi.paused_notes) {
+            const notesNode = new TreeNode(`"${wi.paused_notes}"`, 'label', vscode.TreeItemCollapsibleState.None);
+            notesNode.iconPath = new vscode.ThemeIcon('comment');
+            children.push(notesNode);
         }
         // Checkpoints
         if (group && group.checkpoints.length > 0) {
