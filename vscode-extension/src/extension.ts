@@ -160,6 +160,8 @@ export function activate(context: vscode.ExtensionContext): void {
           JSON.stringify(inbox, null, 2)
         )
       }
+      // Bring Claude Code panel into focus so the conversation is immediately visible
+      vscode.commands.executeCommand('claude-vscode.sidebar.open').then(undefined, () => {})
     }),
 
     cmd('babelgit.todoPush', async (...args: unknown[]) => {
