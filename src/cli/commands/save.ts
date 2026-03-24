@@ -5,6 +5,7 @@ import { runHooks, hooksFailed } from '../../core/hooks.js'
 import { evaluateRules, formatViolations } from '../../core/rules.js'
 import { detectCallerType } from '../../core/governance.js'
 import { error, success, hint } from '../display.js'
+import { appendConversationEntry, getChangedFiles } from '../../core/conversation.js'
 
 export async function runSave(notes?: string, repoPath: string = process.cwd()): Promise<void> {
   await loadConfig(repoPath).catch(err => {
@@ -75,9 +76,19 @@ export async function runSave(notes?: string, repoPath: string = process.cwd()):
     ? `save(${workItem.id}): ${notes}`
     : `save(${workItem.id}): ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`
 
+  const filesChanged = await getChangedFiles(repoPath)
+
   await addAll(repoPath)
   const sha = await commit(message, repoPath)
   const shortSha = sha ? sha.slice(0, 7) : await getShortSha('HEAD', repoPath)
+
+  await appendConversationEntry(repoPath, workItem.id, {
+    event: 'save',
+    timestamp: new Date().toISOString(),
+    notes,
+    commit: shortSha,
+    filesChanged,
+  }).catch(() => {})
 
   // after_save hooks (non-blocking)
   if (config) await runHooks('after_save', config, repoPath)

@@ -13,6 +13,7 @@ import {
 import { detectCallerType } from '../../core/governance.js'
 import { timeAgoLabel } from '../../core/workitem.js'
 import { error, showCheckpointCreated, success, hint } from '../display.js'
+import { appendConversationEntry } from '../../core/conversation.js'
 import { formatAutomationSummary } from '../../core/scripts.js'
 import type { Verdict, AutomationResult } from '../../types.js'
 import chalk from 'chalk'
@@ -124,6 +125,14 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
     // Post to integrations
     await postCheckpointToIntegrations(workItem, checkpoint, repoPath)
 
+    await appendConversationEntry(repoPath, workItem.id, {
+      event: 'verdict',
+      timestamp: new Date().toISOString(),
+      verdict: 'reject',
+      notes,
+      commit: revertTo.slice(0, 7),
+    }).catch(() => {})
+
     console.log()
     success(`Rejected and reverted to: ${revertTo.slice(0, 7)}`)
     if (notes) console.log(`  Reason: ${notes}`)
@@ -159,6 +168,14 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
 
   // Post to integrations
   await postCheckpointToIntegrations(workItem, checkpoint, repoPath)
+
+  await appendConversationEntry(repoPath, workItem.id, {
+    event: 'verdict',
+    timestamp: new Date().toISOString(),
+    verdict,
+    notes,
+    commit: shortSha,
+  }).catch(() => {})
 
   showCheckpointCreated({
     verdict,

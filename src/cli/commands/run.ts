@@ -6,6 +6,7 @@ import { runAllCommands, hasRequiredFailure, serializeResults } from '../../core
 import { runHooks, hooksFailed } from '../../core/hooks.js'
 import { timeAgoLabel } from '../../core/workitem.js'
 import { error, showRunSession } from '../display.js'
+import { appendConversationEntry } from '../../core/conversation.js'
 import chalk from 'chalk'
 
 export async function runRun(repoPath: string = process.cwd()): Promise<void> {
@@ -86,6 +87,12 @@ export async function runRun(repoPath: string = process.cwd()): Promise<void> {
 
   workItem.stage = 'run_session_open'
   await saveWorkItem(workItem, repoPath)
+
+  await appendConversationEntry(repoPath, workItem.id, {
+    event: 'run',
+    timestamp: now,
+    lockedCommit: shortSha,
+  }).catch(() => {})
 
   // after_run hooks (non-blocking — session is already open)
   await runHooks('after_run', config, repoPath)
