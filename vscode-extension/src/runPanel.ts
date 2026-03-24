@@ -86,7 +86,7 @@ function esc(s: string): string {
 }
 
 function buildHtml(
-  wi: { id: string; description: string; branch: string },
+  wi: { id: string; description: string; branch?: string },
   lockedCommit: string,
   diffStat: string
 ): string {
@@ -182,7 +182,7 @@ function buildHtml(
 
 <section>
   <h1>${esc(wi.id)} — ${esc(wi.description)}</h1>
-  <div class="meta">Branch: <code>${esc(wi.branch)}</code> · Locked at: <code>${esc(lockedCommit)}</code></div>
+  <div class="meta">Branch: <code>${esc(wi.branch ?? '—')}</code> · Locked at: <code>${esc(lockedCommit)}</code></div>
 </section>
 
 <section>

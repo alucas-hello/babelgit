@@ -14,11 +14,26 @@ export interface GitStats {
 export interface WorkItemState {
   id: string
   description: string
-  branch: string
+  branch?: string
   stage: string
   ship_ready?: boolean
   created_at: string
+  planned_at?: string
   paused_notes?: string
+}
+
+export interface BabelVerdicts {
+  keep: string
+  refine: string
+  reject: string
+  ship: string
+}
+
+export interface RemoteBranch {
+  name: string        // full branch name e.g. feature/WI-011-description
+  workItemId: string  // e.g. WI-011
+  description: string // e.g. description
+  isLocal: boolean    // whether we also have it locally
 }
 
 export interface CheckpointState {
@@ -57,6 +72,9 @@ export class StateWatcher {
   private _checkpoints: CheckpointState[] = []
   private _allCheckpointGroups: CheckpointGroup[] = []
   private _gitStats: GitStats | null = null
+  private _remoteBranches: RemoteBranch[] = []
+  private _verdicts: BabelVerdicts | null = null
+  private _remoteRefreshTimer: ReturnType<typeof setInterval> | undefined
   private workspaceRoot: string | undefined
 
   constructor() {
@@ -80,6 +98,13 @@ export class StateWatcher {
     this.watcher.onDidDelete(refresh)
 
     this.refresh()
+    this._verdicts = this.loadVerdicts()
+    this.refreshRemoteBranches()
+    // Poll remote branches every 60 seconds
+    this._remoteRefreshTimer = setInterval(() => {
+      this.refreshRemoteBranches()
+      this._onDidChange.fire()
+    }, 60_000)
   }
 
   refresh(): void {
@@ -234,7 +259,61 @@ export class StateWatcher {
     return this.workspaceRoot
   }
 
+  get verdicts(): BabelVerdicts {
+    return this._verdicts ?? { keep: 'keep', refine: 'refine', reject: 'reject', ship: 'ship' }
+  }
+
+  get remoteBranches(): RemoteBranch[] {
+    return this._remoteBranches
+  }
+
+  private loadVerdicts(): BabelVerdicts | null {
+    if (!this.workspaceRoot) return null
+    try {
+      const configPath = path.join(this.workspaceRoot, 'babel.config.yml')
+      if (!fs.existsSync(configPath)) return null
+      const raw = fs.readFileSync(configPath, 'utf8')
+      const match = raw.match(/verdicts:\s*\n(?:[ \t]+\w+:[ \t]*\S+\n?)+/)
+      if (!match) return null
+      const keep    = raw.match(/keep:\s*(\S+)/)?.[1] ?? 'keep'
+      const refine  = raw.match(/refine:\s*(\S+)/)?.[1] ?? 'refine'
+      const reject  = raw.match(/reject:\s*(\S+)/)?.[1] ?? 'reject'
+      const ship    = raw.match(/ship:\s*(\S+)/)?.[1] ?? 'ship'
+      return { keep, refine, reject, ship }
+    } catch { return null }
+  }
+
+  private refreshRemoteBranches(): void {
+    if (!this.workspaceRoot) return
+    try {
+      const raw = execSync('git branch -r --format "%(refname:short)" 2>/dev/null', {
+        cwd: this.workspaceRoot, encoding: 'utf8', timeout: 5000,
+      }).trim()
+      if (!raw) { this._remoteBranches = []; return }
+
+      const localIds = new Set(Object.keys(this._currentState?.work_items ?? {}))
+      const branches: RemoteBranch[] = []
+
+      for (const ref of raw.split('\n').map(s => s.trim()).filter(Boolean)) {
+        // Strip "origin/" prefix
+        const branchName = ref.replace(/^origin\//, '')
+        // Match feature/WI-XXX-* pattern
+        const m = branchName.match(/^(?:feature|fix)\/([A-Z]+-\d+)-(.+)$/)
+        if (!m) continue
+        const [, workItemId, slug] = m
+        const description = slug.replace(/-/g, ' ')
+        const isLocal = localIds.has(workItemId)
+        branches.push({ name: branchName, workItemId, description, isLocal })
+      }
+
+      this._remoteBranches = branches
+    } catch {
+      this._remoteBranches = []
+    }
+  }
+
   dispose(): void {
+    if (this._remoteRefreshTimer) clearInterval(this._remoteRefreshTimer)
     this.watcher?.dispose()
     this._onDidChange.dispose()
   }

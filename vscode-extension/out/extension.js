@@ -153,6 +153,18 @@ function activate(context) {
             return;
         await runner.run(['continue', id]);
         refreshAll();
+    }), cmd('babelgit.startItem', async (...args) => {
+        const id = args[0];
+        if (!id)
+            return;
+        await runner.run(['start', id]);
+        refreshAll();
+    }), cmd('babelgit.todoPush', async (...args) => {
+        const id = args[0];
+        if (!id)
+            return;
+        await runner.run(['todo', 'push', id]);
+        refreshAll();
     }), cmd('babelgit.state', () => {
         refreshAll();
         return Promise.resolve();

@@ -40,12 +40,12 @@ export async function runState(
     if (opts.json) {
       console.log(JSON.stringify({ work_item: null, paused_work_items: paused, suggested_next: paused.length ? 'babel continue' : 'babel start' }, null, 2))
     } else {
-      showNoWorkItem(paused.map(wi => ({ id: wi.id, description: wi.description, branch: wi.branch })))
+      showNoWorkItem(paused.map(wi => ({ id: wi.id, description: wi.description, branch: wi.branch ?? '' })))
     }
     return
   }
 
-  const currentBranch = await getCurrentBranch(repoPath).catch(() => workItem!.branch)
+  const currentBranch = await getCurrentBranch(repoPath).catch(() => workItem!.branch ?? '')
   const uncommittedFiles = await getUncommittedFileCount(repoPath).catch(() => 0)
   const commitsAhead = await getCommitsAheadOfBase(config.base_branch, repoPath).catch(() => 0)
   const conflicts = await hasConflicts(repoPath).catch(() => false)
@@ -126,7 +126,7 @@ export async function runState(
     description: workItem.description,
     stage: workItem.stage,
     shipReady: workItem.ship_ready,
-    branch: workItem.branch,
+    branch: workItem.branch ?? '',
     uncommittedFiles,
     commitsAhead,
     lastSyncedMinutesAgo: null,

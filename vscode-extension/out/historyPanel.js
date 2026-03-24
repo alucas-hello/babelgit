@@ -149,7 +149,7 @@ function buildHtml(wi, commits, checkpointsByCommit, checkpoints) {
     })
         .join('');
     const header = wi
-        ? `<div class="header"><strong>${escHtml(wi.id)}</strong> — ${escHtml(wi.description)}<br><small>Branch: ${escHtml(wi.branch)} · ${checkpoints.length} checkpoint(s)</small></div>`
+        ? `<div class="header"><strong>${escHtml(wi.id)}</strong> — ${escHtml(wi.description)}<br><small>Branch: ${escHtml(wi.branch ?? '—')} · ${checkpoints.length} checkpoint(s)</small></div>`
         : '<div class="header">No active work item</div>';
     return `<!DOCTYPE html>
 <html lang="en">

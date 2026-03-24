@@ -46,7 +46,7 @@ export async function runPause(notes?: string, repoPath: string = process.cwd())
 
   // Push to remote
   try {
-    await push(workItem.branch, repoPath)
+    await push(workItem.branch!, repoPath)
   } catch {
     // No remote — that's OK for local repos
   }
@@ -74,7 +74,7 @@ export async function runPause(notes?: string, repoPath: string = process.cwd())
   success(`Work paused: ${workItem.id}`)
   console.log()
   console.log(`  "${workItem.description}"`)
-  console.log(`  Branch pushed to origin/${workItem.branch}`)
+  console.log(`  Branch pushed to origin/${workItem.branch!}`)
   console.log()
   hint(`Resume later with: babel continue ${workItem.id}`)
   console.log()
