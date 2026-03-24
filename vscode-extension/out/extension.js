@@ -42,6 +42,7 @@ const statusBar_1 = require("./statusBar");
 const sidebarProvider_1 = require("./sidebarProvider");
 const historyPanel_1 = require("./historyPanel");
 const runPanel_1 = require("./runPanel");
+const workItemPanel_1 = require("./workItemPanel");
 function activate(context) {
     const outputChannel = vscode.window.createOutputChannel('babelgit');
     const watcher = new stateWatcher_1.StateWatcher();
@@ -187,6 +188,24 @@ function activate(context) {
         return Promise.resolve();
     }), cmd('babelgit.history', async () => {
         historyPanel_1.HistoryPanel.show(watcher);
+    }), cmd('babelgit.openWorkItem', async (...args) => {
+        const id = args[0];
+        if (!id)
+            return;
+        const wi = watcher.state?.work_items[id];
+        if (!wi)
+            return;
+        const root = watcher.workspacePath;
+        if (!root)
+            return;
+        if (wi.stage === 'run_session_open' && watcher.currentWorkItem?.id === id) {
+            runPanel_1.RunPanel.show(watcher, runner);
+        }
+        else {
+            const group = watcher.allCheckpointGroups.find(g => g.workItemId === id);
+            const checkpoints = group?.checkpoints ?? [];
+            workItemPanel_1.WorkItemPanel.open(context, wi, checkpoints, root);
+        }
     }), cmd('babelgit.openNotes', async (...args) => {
         const filePath = args[0];
         if (!filePath)

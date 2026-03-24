@@ -331,10 +331,14 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
       node.tooltip = 'Pending ID reservation — will be assigned a permanent WI number when online'
     }
 
-    // Make the WI node itself open the spec notes file on click
+    // Route click: todo items open their spec file; everything else opens the detail panel
     if (workspacePath) {
-      const notesPath = `${workspacePath}/.babel/notes/${wi.id}.md`
-      node.command = { command: 'babelgit.openNotes', title: 'Open spec', arguments: [notesPath] }
+      if (isTodo) {
+        const notesPath = `${workspacePath}/.babel/notes/${wi.id}.md`
+        node.command = { command: 'babelgit.openNotes', title: 'Open spec', arguments: [notesPath] }
+      } else {
+        node.command = { command: 'babelgit.openWorkItem', title: 'Open detail', arguments: [wi.id] }
+      }
     }
 
     const children: TreeNode[] = []

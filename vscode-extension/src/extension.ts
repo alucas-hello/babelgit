@@ -5,6 +5,7 @@ import { StatusBarManager } from './statusBar'
 import { ActiveWorkProvider, HistoryProvider, ActionsProvider, WatcherProvider } from './sidebarProvider'
 import { HistoryPanel } from './historyPanel'
 import { RunPanel } from './runPanel'
+import { WorkItemPanel } from './workItemPanel'
 
 export function activate(context: vscode.ExtensionContext): void {
   const outputChannel = vscode.window.createOutputChannel('babelgit')
@@ -178,6 +179,22 @@ export function activate(context: vscode.ExtensionContext): void {
 
     cmd('babelgit.history', async () => {
       HistoryPanel.show(watcher)
+    }),
+
+    cmd('babelgit.openWorkItem', async (...args: unknown[]) => {
+      const id = args[0] as string | undefined
+      if (!id) return
+      const wi = watcher.state?.work_items[id]
+      if (!wi) return
+      const root = watcher.workspacePath
+      if (!root) return
+      if (wi.stage === 'run_session_open' && watcher.currentWorkItem?.id === id) {
+        RunPanel.show(watcher, runner)
+      } else {
+        const group = watcher.allCheckpointGroups.find(g => g.workItemId === id)
+        const checkpoints = group?.checkpoints ?? []
+        WorkItemPanel.open(context, wi, checkpoints, root)
+      }
     }),
 
     cmd('babelgit.openNotes', async (...args: unknown[]) => {
