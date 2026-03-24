@@ -181,6 +181,22 @@ export async function runInit(repoPath: string = process.cwd()): Promise<void> {
       message: 'Work item ID prefix?',
       default: 'WI',
     },
+    {
+      type: 'list',
+      name: 'delivery_strategy',
+      message: 'Delivery strategy?',
+      choices: [
+        { name: 'Direct merge    (babel ship merges feature branch into base)', value: 'direct' },
+        { name: 'Pull request    (babel ship opens a GitHub PR for review)', value: 'pr' },
+      ],
+    },
+    {
+      type: 'input',
+      name: 'github_token_env',
+      message: 'Environment variable name for GitHub token?',
+      default: 'GITHUB_TOKEN',
+      when: (a: Record<string, string>) => a.delivery_strategy === 'pr',
+    },
   ])
 
   let config: Partial<BabelConfig>
@@ -220,6 +236,16 @@ export async function runInit(repoPath: string = process.cwd()): Promise<void> {
     }
   } else {
     config = TEMPLATES[template](answers.base_branch, answers.prefix)
+  }
+
+  if (answers.delivery_strategy === 'pr') {
+    config.integrations = {
+      github: {
+        enabled: true,
+        token_env: answers.github_token_env || 'GITHUB_TOKEN',
+        ship_via_pr: true,
+      },
+    }
   }
 
   await writeConfig(config, repoPath)
