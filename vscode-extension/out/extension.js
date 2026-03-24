@@ -148,6 +148,33 @@ function activate(context) {
         const args = notes ? ['pause', notes] : ['pause'];
         await runner.run(args);
         refreshAll();
+    }), cmd('babelgit.deleteItem', async (...args) => {
+        const id = args[0];
+        if (!id)
+            return;
+        const wi = watcher.state?.work_items[id];
+        const confirm = await vscode.window.showWarningMessage(`Trash "${wi?.description ?? id}"?`, { modal: true }, 'Trash it');
+        if (confirm !== 'Trash it')
+            return;
+        // Write state directly — babel stop has an interactive y/N prompt we can't answer
+        const fs = require('fs');
+        const path = require('path');
+        const root = watcher.workspacePath;
+        if (root) {
+            const statePath = path.join(root, '.babel', 'state.json');
+            try {
+                const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
+                if (state.work_items[id]) {
+                    state.work_items[id].stage = 'stopped';
+                    state.work_items[id].ship_ready = false;
+                }
+                if (state.current_work_item_id === id)
+                    delete state.current_work_item_id;
+                fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
+            }
+            catch { /* ignore */ }
+        }
+        refreshAll();
     }), cmd('babelgit.continueItem', async (...args) => {
         const id = args[0];
         if (!id)

@@ -284,7 +284,7 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
       // Your own items
       for (const wi of items) {
         const group = groups.find(g => g.workItemId === wi.id)
-        children.push(this.buildWINode(wi, group, stage, verdicts, githubBaseUrl, workspacePath))
+        children.push(this.buildWINode(wi, group, stage, verdicts, githubBaseUrl, workspacePath, state?.current_work_item_id ?? undefined))
       }
 
       // Teammate items (remote branches not in local state)
@@ -309,7 +309,8 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
     stage: string,
     verdicts: { keep: string; refine: string; reject: string; ship: string },
     githubBaseUrl: string | null,
-    workspacePath: string | undefined
+    workspacePath: string | undefined,
+    currentWorkItemId?: string
   ): TreeNode {
     const isTodo = stage === 'todo'
     const isPaused = stage === 'paused'
@@ -345,7 +346,6 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
 
     if (isTodo) {
       if (isDraft) {
-        // Can't start or push until we have a real ID
         const waitNode = new TreeNode('Waiting for ID reservation…', 'label', vscode.TreeItemCollapsibleState.None)
         waitNode.iconPath = new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.yellow'))
         waitNode.tooltip = 'The watcher will claim a permanent WI number when connectivity is restored.'
@@ -356,28 +356,18 @@ export class HistoryProvider implements vscode.TreeDataProvider<TreeNode> {
         startNode.command = { command: 'babelgit.startItem', title: 'Start', arguments: [wi.id] }
         children.push(startNode)
 
-        if (!wi.branch) {
-          // Not yet pushed — show push button
-          const pushNode = new TreeNode('Push spec to GitHub', 'action', vscode.TreeItemCollapsibleState.None)
-          pushNode.iconPath = new vscode.ThemeIcon('cloud-upload')
-          pushNode.command = { command: 'babelgit.todoPush', title: 'Push to GitHub', arguments: [wi.id] }
-          children.push(pushNode)
-        } else {
-          // Already pushed — show sync button + GitHub link
-          const syncNode = new TreeNode('Sync spec', 'action', vscode.TreeItemCollapsibleState.None)
-          syncNode.iconPath = new vscode.ThemeIcon('sync')
-          syncNode.command = { command: 'babelgit.todoPush', title: 'Sync spec', arguments: [wi.id] }
-          children.push(syncNode)
-
-          if (githubBaseUrl) {
-            const ghUrl = `${githubBaseUrl}/tree/${wi.branch}`
-            const ghNode = new TreeNode('View on GitHub', 'action', vscode.TreeItemCollapsibleState.None)
-            ghNode.iconPath = new vscode.ThemeIcon('link-external')
-            ghNode.command = { command: 'vscode.open', title: 'View on GitHub', arguments: [vscode.Uri.parse(ghUrl)] }
-            children.push(ghNode)
-          }
-        }
+        const trashNode = new TreeNode('Trash', 'action', vscode.TreeItemCollapsibleState.None)
+        trashNode.iconPath = new vscode.ThemeIcon('trash', new vscode.ThemeColor('list.errorForeground'))
+        trashNode.command = { command: 'babelgit.deleteItem', title: 'Trash', arguments: [wi.id] }
+        children.push(trashNode)
       }
+    }
+
+    if (stage === 'run_session_open' && currentWorkItemId !== wi.id) {
+      const trashNode = new TreeNode('Trash', 'action', vscode.TreeItemCollapsibleState.None)
+      trashNode.iconPath = new vscode.ThemeIcon('trash', new vscode.ThemeColor('list.errorForeground'))
+      trashNode.command = { command: 'babelgit.deleteItem', title: 'Trash', arguments: [wi.id] }
+      children.push(trashNode)
     }
 
     if (wi.ship_ready && stage !== 'shipped') {
