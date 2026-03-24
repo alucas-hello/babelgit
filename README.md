@@ -218,7 +218,7 @@ By default, `babel init` installs git hooks that **block any git operation not i
 
 ### Claude Code pre-tool enforcement
 
-`babel hook install` adds a second enforcement layer specifically for AI agents using Claude Code. It installs a `PreToolUse` hook in `.claude/settings.json` that fires before every `Edit` or `Write` tool call:
+`babel hook install` adds a second enforcement layer specifically for AI agents using Claude Code. It installs a `PreToolUse` hook in `.claude/settings.json` that fires before every `Edit` or `Write` tool call, and a `UserPromptSubmit` hook that bridges the extension and the agent session:
 
 ```
 ✗ Hook blocked: no active work item.
@@ -374,6 +374,7 @@ The babelgit VSCode extension (`vscode-extension/`) provides a sidebar with two 
 - ✅ VSCode extension with board view (stage buckets, todo actions, team visibility)
 - ✅ `babel hook install` — Claude Code `PreToolUse` enforcement hook
 - ✅ Hook blocks `Edit`/`Write` tool calls with no active work item; readable error replaces silent revert
+- ✅ `UserPromptSubmit` hook — extension writes `.babel/agent-inbox.json` on Start Work; next Claude message auto-injects the work item context
 
 **v0.4 — Planned**
 - [ ] Shared checkpoint storage (push checkpoint records to git notes or branch)
