@@ -3,6 +3,8 @@
 This directory is for manual testing, scratch scripts, and exploratory work.
 It is gitignored from the main project. Make a mess here.
 
+BBL-050: PR workflow test — trivial change to verify end-to-end ship flow.
+
 ## Contents
 
 - `test-repos/` — temporary git repos created during manual testing (blown away freely)
