@@ -64,6 +64,16 @@ function activate(context) {
         }
         catch { /* shown in output channel */ }
     });
+    // VS Code passes the TreeItem when a command fires from view/item/context inline buttons.
+    // This extracts the string ID whether called directly (string) or from a context menu (TreeItem).
+    const wiIdFromArg = (arg) => {
+        if (typeof arg === 'string')
+            return arg || undefined;
+        if (arg && typeof arg.label === 'string') {
+            return arg.label || undefined;
+        }
+        return undefined;
+    };
     context.subscriptions.push(outputChannel, watcher, statusBar, cmd('babelgit.init', async () => {
         await runner.run(['init']);
         refreshAll();
@@ -150,7 +160,7 @@ function activate(context) {
         await runner.run(args);
         refreshAll();
     }), cmd('babelgit.deleteItem', async (...args) => {
-        const id = args[0];
+        const id = wiIdFromArg(args[0]);
         if (!id)
             return;
         const wi = watcher.state?.work_items[id];
@@ -177,13 +187,13 @@ function activate(context) {
         }
         refreshAll();
     }), cmd('babelgit.continueItem', async (...args) => {
-        const id = args[0];
+        const id = wiIdFromArg(args[0]);
         if (!id)
             return;
         await runner.run(['continue', id]);
         refreshAll();
     }), cmd('babelgit.startItem', async (...args) => {
-        const id = args[0];
+        const id = wiIdFromArg(args[0]);
         if (!id)
             return;
         await runner.run(['start', id]);

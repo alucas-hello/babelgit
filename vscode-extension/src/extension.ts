@@ -30,6 +30,16 @@ export function activate(context: vscode.ExtensionContext): void {
       try { await fn(...args) } catch { /* shown in output channel */ }
     })
 
+  // VS Code passes the TreeItem when a command fires from view/item/context inline buttons.
+  // This extracts the string ID whether called directly (string) or from a context menu (TreeItem).
+  const wiIdFromArg = (arg: unknown): string | undefined => {
+    if (typeof arg === 'string') return arg || undefined
+    if (arg && typeof (arg as vscode.TreeItem).label === 'string') {
+      return ((arg as vscode.TreeItem).label as string) || undefined
+    }
+    return undefined
+  }
+
   context.subscriptions.push(
     outputChannel,
     watcher,
@@ -133,7 +143,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     cmd('babelgit.deleteItem', async (...args: unknown[]) => {
-      const id = args[0] as string | undefined
+      const id = wiIdFromArg(args[0])
       if (!id) return
       const wi = watcher.state?.work_items[id]
       const confirm = await vscode.window.showWarningMessage(
@@ -162,14 +172,14 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     cmd('babelgit.continueItem', async (...args: unknown[]) => {
-      const id = args[0] as string | undefined
+      const id = wiIdFromArg(args[0])
       if (!id) return
       await runner.run(['continue', id])
       refreshAll()
     }),
 
     cmd('babelgit.startItem', async (...args: unknown[]) => {
-      const id = args[0] as string | undefined
+      const id = wiIdFromArg(args[0])
       if (!id) return
       await runner.run(['start', id])
       refreshAll()
