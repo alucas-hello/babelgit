@@ -158,11 +158,14 @@ class ActiveWorkProvider {
             start.command = { command: 'babelgit.start', title: 'Start' };
             return [hint, start];
         }
+        const stats = this.watcher.gitStats;
+        const lastUpdated = stats?.lastCommitAt ? formatAge(stats.lastCommitAt) : null;
         const nodes = [
             labelNode('ID', wi.id),
             labelNode('Status', formatStage(wi)),
             labelNode('Branch', wi.branch ?? '—'),
             labelNode('Started', formatDate(wi.created_at)),
+            ...(lastUpdated ? [labelNode('Last updated', lastUpdated)] : []),
             labelNode('Description', wi.description),
         ];
         // Pause button inline
@@ -170,7 +173,6 @@ class ActiveWorkProvider {
         pauseNode.iconPath = new vscode.ThemeIcon('debug-pause');
         pauseNode.command = { command: 'babelgit.pause', title: 'Pause' };
         nodes.push(pauseNode);
-        const stats = this.watcher.gitStats;
         if (stats)
             nodes.push(progressNode(stats));
         const notes = this.watcher.workNotes;
