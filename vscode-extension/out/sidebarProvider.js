@@ -294,10 +294,12 @@ class HistoryProvider {
     buildWINode(wi, group, stage, verdicts, githubBaseUrl, workspacePath, currentWorkItemId) {
         const isTodo = stage === 'todo';
         const isPaused = stage === 'paused';
-        const activeStages = new Set(['todo', 'in_progress', 'ship_ready', 'run_session_open', 'paused', 'pr_open']);
-        const collapsible = activeStages.has(stage)
-            ? vscode.TreeItemCollapsibleState.Expanded
-            : vscode.TreeItemCollapsibleState.Collapsed;
+        const activeStages = new Set(['in_progress', 'ship_ready', 'run_session_open', 'paused', 'pr_open']);
+        const collapsible = isTodo
+            ? vscode.TreeItemCollapsibleState.None
+            : activeStages.has(stage)
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed;
         const isDraft = wi.id.startsWith('DRAFT-');
         const displayId = isDraft ? `⏳ ${wi.id}` : wi.id;
         const node = new TreeNode(wi.description, 'historyGroup', collapsible);
@@ -321,23 +323,11 @@ class HistoryProvider {
             }
         }
         const children = [];
-        if (isTodo) {
-            if (isDraft) {
-                const waitNode = new TreeNode('Waiting for ID reservation…', 'label', vscode.TreeItemCollapsibleState.None);
-                waitNode.iconPath = new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.yellow'));
-                waitNode.tooltip = 'The watcher will claim a permanent WI number when connectivity is restored.';
-                children.push(waitNode);
-            }
-            else {
-                const startNode = new TreeNode('Start work', 'action', vscode.TreeItemCollapsibleState.None);
-                startNode.iconPath = new vscode.ThemeIcon('debug-start', new vscode.ThemeColor('charts.green'));
-                startNode.command = { command: 'babelgit.startItem', title: 'Start', arguments: [wi.id] };
-                children.push(startNode);
-                const trashNode = new TreeNode('Trash', 'action', vscode.TreeItemCollapsibleState.None);
-                trashNode.iconPath = new vscode.ThemeIcon('trash', new vscode.ThemeColor('list.errorForeground'));
-                trashNode.command = { command: 'babelgit.deleteItem', title: 'Trash', arguments: [wi.id] };
-                children.push(trashNode);
-            }
+        if (isTodo && isDraft) {
+            const waitNode = new TreeNode('Waiting for ID reservation…', 'label', vscode.TreeItemCollapsibleState.None);
+            waitNode.iconPath = new vscode.ThemeIcon('loading~spin', new vscode.ThemeColor('charts.yellow'));
+            waitNode.tooltip = 'The watcher will claim a permanent WI number when connectivity is restored.';
+            children.push(waitNode);
         }
         if (stage === 'run_session_open' && currentWorkItemId !== wi.id) {
             const trashNode = new TreeNode('Trash', 'action', vscode.TreeItemCollapsibleState.None);
