@@ -174,6 +174,8 @@ function activate(context) {
             };
             fs.writeFileSync(path.join(root, '.babel', 'agent-inbox.json'), JSON.stringify(inbox, null, 2));
         }
+        // Bring Claude Code panel into focus so the conversation is immediately visible
+        vscode.commands.executeCommand('claude-vscode.sidebar.open').then(undefined, () => { });
     }), cmd('babelgit.todoPush', async (...args) => {
         const id = args[0];
         if (!id)
