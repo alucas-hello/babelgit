@@ -300,6 +300,8 @@ integrations:
   github:
     enabled: true
     create_draft_pr_on_pause: true
+    ship_via_pr: true        # babel ship opens a PR instead of direct merge
+    token_env: GITHUB_TOKEN  # env var holding your PAT
 ```
 
 ---
@@ -323,29 +325,42 @@ Agents call `babel_state()` first, then operate within `permitted_operations`. T
 
 ## VSCode Extension
 
-The babelgit VSCode extension (`vscode-extension/`) provides a sidebar with two panels:
+The babelgit VSCode extension (`vscode-extension/`) provides a sidebar and a full board view.
 
-**Quick Actions** — context-sensitive commands for the current work item: save, run, pause, continue, ship, and (if not yet initialized) init.
+### Sidebar panels
 
-**Board** — all work items grouped by stage:
+**Active Work** — the current work item: ID, status, branch, started time, last updated, progress (files changed, commits since checkpoint), and spec summary.
+
+**Work Items** — all work items grouped by stage, with a persistent **Open Board** entry at the top. Each item shows its ID and description. Hover to reveal inline action buttons (▶ start, ▶ continue, 🗑 trash).
 
 | Bucket | Contents |
 |--------|----------|
-| Todo | Planned items with Start and Push to GitHub actions |
-| In Progress | Active work items |
-| Paused | Paused items with Continue action |
-| Review Open | Items in `babel run` session |
-| Complete / Deployed | Shipped items (label uses `verdicts.ship` from config) |
+| Todo | Planned items — click ▶ to start, 🗑 to trash |
+| In Progress | Active work |
+| Review Open | Items in a `babel run` session |
+| Paused | Paused items — click ▶ to continue |
+| PR Open | Items waiting on a GitHub PR review — click to view PR |
+| Merged | PRs merged on GitHub — pending branch cleanup |
+| Ready to Merge | Items with a `ship` verdict, awaiting `babel ship` |
+| Shipped / Deployed | Completed items (label uses `verdicts.ship` from config) |
 | Stopped | Abandoned items |
-| Team (in In Progress) | Teammate branches parsed from `git branch -r` — visible but not actionable |
+| Team (in In Progress) | Teammate branches from `git branch -r` — visible but not actionable |
 
-**DRAFT items** in the Todo bucket display with a spinning indicator and "Waiting for ID reservation…" — Start and Push are disabled until the daemon resolves the ID.
+**Quick Actions** — context-sensitive commands for the current work item: save, run, pause, continue, keep, refine, reject, ship.
 
-**Todo item actions:**
-- Click the item label → opens `.babel/notes/WI-XXX.md` spec locally
-- Start — runs `babel start WI-XXX`
-- Push spec / Sync spec — runs `babel todo push WI-XXX`
-- View on GitHub — opens branch on github.com (shown after first push)
+### Board view
+
+Click **Open Board** (always visible at the top of Work Items) to open a full Kanban board in an editor tab. Cards show the work item ID, branch, description, last checkpoint, and contextual action buttons. The **+ Add work item** button in the Todo column calls `babel start`.
+
+### PR workflow
+
+When `ship_via_pr: true` is set in `babel.config.yml`, `babel ship` pushes the feature branch and opens a GitHub PR instead of merging directly. The work item moves to **PR Open** in the board. After merging on GitHub, move the item to **Merged**.
+
+A `ship` verdict checkpoint is **always required** before a PR can be opened — this cannot be bypassed by config. A human must explicitly run `babel run` → `babel ship "notes"` before the PR gate will open.
+
+### DRAFT items
+
+DRAFT items in the Todo bucket display with a spinning indicator — inline actions are disabled until the watch daemon resolves the ID to a permanent number.
 
 ---
 
@@ -378,6 +393,16 @@ The babelgit VSCode extension (`vscode-extension/`) provides a sidebar with two 
 - ✅ `babel hook install` — Claude Code `PreToolUse` enforcement hook
 - ✅ Hook blocks `Edit`/`Write` tool calls with no active work item; readable error replaces silent revert
 - ✅ `UserPromptSubmit` hook — extension writes `.babel/agent-inbox.json` on Start Work; next Claude message auto-injects the work item context
+
+**v0.3.1 — Extension & PR workflow improvements ✅**
+- ✅ Full Kanban board panel — cards with action buttons, Add work item, always-visible Open Board entry
+- ✅ PR workflow (`ship_via_pr: true`) — push branch, open GitHub PR, `pr_open` stage in board
+- ✅ Merged bucket — items move from PR Open → Merged after GitHub merge
+- ✅ Unconditional ship-verdict gate — PRs cannot be opened without a human `ship` verdict, regardless of config
+- ✅ Inline icon buttons in Work Items tree (▶ start/continue, 🗑 trash) — no child nodes
+- ✅ Two-row item layout — ID on header row, full-width description beneath
+- ✅ Work Items accordion (renamed from History), board icon persistent in tree
+- ✅ Auto-save daemon — uncommitted changes committed within 5 min of session loss
 
 **v0.4 — Planned**
 - [ ] Shared checkpoint storage (push checkpoint records to git notes or branch)
