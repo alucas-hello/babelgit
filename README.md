@@ -176,9 +176,12 @@ babel start BBL-042        # picks up the todo, checks out its branch
 |-----------------|-------------|
 | File edits with no active work item | Reverts them immediately |
 | `.babel/notes/WI-XXX.md` changes | Auto-syncs spec to GitHub branch (3s debounce) |
+| Uncommitted changes on active WI after 5min inactivity | **Auto-saves** with `auto-save(BBL-XXX)` commit |
 | External commits on your branch | Logs an alert |
 | CI failures (requires `GITHUB_TOKEN`) | Logs an alert |
 | `DRAFT-*` work items | Resolves to permanent IDs when connectivity returns |
+
+**Auto-save protects against session loss.** If an AI agent writes files and the session ends before `babel save` is called, the daemon commits those changes within 5 minutes. This prevents the ironic case where babelgit — a tool designed to preserve work — loses work due to an agent session ending mid-task. Auto-save events appear as green entries in the VSCode extension's Watcher panel.
 
 **macOS persistent install:**
 

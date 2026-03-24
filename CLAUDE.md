@@ -90,6 +90,16 @@ The hook also fires with a specific message if your current WI is in a non-edita
 
 **Why this exists:** Without this hook, an AI agent working in this repo can unknowingly edit files on `main` with no work item. The watch daemon reverts those edits silently, producing a confusing loop where edits appear to fail. The hook fires at the tool-call layer — before any write — and explains the problem in plain language.
 
+## Watch Daemon — Auto-Save Safety Net
+
+If your session ends before you call `babel save`, the watch daemon has you covered. Every minute it checks: does the active work item have uncommitted changes, and has there been no commit in the last 5 minutes? If yes, it commits automatically:
+
+```
+auto-save(BBL-XXX): uncommitted changes preserved by watcher
+```
+
+**What this means for agents:** Always call `babel save` when you finish a unit of work. But if your session is interrupted — context limit hit, user closed the window, crash — your file writes are not lost. The daemon will commit them within 5 minutes and the next session can see them with `git log`.
+
 ---
 
 ## The Review Handoff — Critical
