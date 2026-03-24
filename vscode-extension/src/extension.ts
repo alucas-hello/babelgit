@@ -168,7 +168,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!wi) return
       const root = watcher.workspacePath
       if (!root) return
-      if (wi.stage === 'run_session_open') {
+      if (wi.stage === 'run_session_open' && watcher.currentWorkItem?.id === id) {
         RunPanel.show(watcher, runner)
       } else {
         const group = watcher.allCheckpointGroups.find(g => g.workItemId === id)

@@ -181,7 +181,7 @@ function activate(context) {
         const root = watcher.workspacePath;
         if (!root)
             return;
-        if (wi.stage === 'run_session_open') {
+        if (wi.stage === 'run_session_open' && watcher.currentWorkItem?.id === id) {
             runPanel_1.RunPanel.show(watcher, runner);
         }
         else {
