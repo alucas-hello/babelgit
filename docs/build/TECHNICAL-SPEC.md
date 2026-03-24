@@ -34,12 +34,14 @@ v0.1 requires nothing beyond Node.js and git. No accounts, no servers, no networ
 
 ```
 babelgit/
+├── .claude/
+│   └── settings.json             ← Claude Code PreToolUse hook (checked in)
 ├── src/
 │   ├── cli/
 │   │   ├── index.ts              ← entry point, command registration
 │   │   ├── commands/
 │   │   │   ├── init.ts           ← includes 4 workflow templates
-│   │   │   ├── start.ts
+│   │   │   ├── start.ts          ← accepts WI ID to start a todo item
 │   │   │   ├── save.ts
 │   │   │   ├── sync.ts
 │   │   │   ├── pause.ts
@@ -50,30 +52,41 @@ babelgit/
 │   │   │   ├── state.ts
 │   │   │   ├── history.ts
 │   │   │   ├── ship.ts
-│   │   │   ├── config.ts         ← babel config show/validate (v0.2)
-│   │   │   └── diag.ts           ← babel diag environment check (v0.2)
+│   │   │   ├── config.ts         ← babel config show/validate
+│   │   │   ├── diag.ts           ← babel diag environment check
+│   │   │   ├── enforce.ts        ← babel enforce on/off/status
+│   │   │   ├── todo.ts           ← babel todo create/push/list
+│   │   │   ├── watch.ts          ← babel watch start/stop/status/install/uninstall
+│   │   │   └── hook.ts           ← babel hook install/uninstall + hook-check-wi
 │   │   └── display.ts            ← all terminal output formatting
 │   ├── mcp/
-│   │   └── index.ts              ← MCP server entry point + tool definitions
+│   │   ├── index.ts              ← MCP server entry point
+│   │   └── tools.ts              ← tool definitions (13+ tools)
 │   ├── core/
 │   │   ├── config.ts             ← babel.config.yml read/validate
 │   │   ├── governance.ts         ← enforcement layer
 │   │   ├── git.ts                ← all git operations via simple-git
 │   │   ├── state.ts              ← .babel/ state management
 │   │   ├── checkpoint.ts         ← attestation creation and reading
-│   │   ├── workitem.ts           ← work item lifecycle management
-│   │   ├── scripts.ts            ← run_commands execution via execa (v0.2)
-│   │   ├── hooks.ts              ← lifecycle hooks execution (v0.2)
-│   │   └── rules.ts              ← rules engine evaluation (v0.2)
+│   │   ├── workitem.ts           ← work item lifecycle, branch naming
+│   │   ├── reservation.ts        ← pluggable WI ID reservation (local/linear/jira)
+│   │   ├── watch.ts              ← watch daemon: file watcher, polling, spec sync
+│   │   ├── scripts.ts            ← run_commands execution via execa
+│   │   ├── hooks.ts              ← lifecycle hooks execution
+│   │   └── rules.ts              ← rules engine evaluation
 │   ├── integrations/
-│   │   ├── linear.ts             ← Linear GraphQL client (v0.2)
-│   │   ├── github.ts             ← GitHub Octokit client (v0.2)
-│   │   └── index.ts              ← IntegrationManager (v0.2)
+│   │   ├── linear.ts             ← Linear GraphQL client
+│   │   ├── github.ts             ← GitHub Octokit client
+│   │   └── index.ts              ← IntegrationManager
 │   └── types.ts                  ← shared TypeScript types
+├── vscode-extension/             ← VSCode sidebar extension
+│   ├── src/
+│   │   ├── extension.ts          ← activation, command registration
+│   │   ├── sidebarProvider.ts    ← Quick Actions + Board view tree providers
+│   │   └── stateWatcher.ts       ← watches .babel/, exposes state and verdicts
+│   └── package.json
 ├── tests/
 ├── sandbox/                      ← manual test scripts and scratch space
-│   └── scripts/
-│       └── lifecycle-test.js     ← end-to-end lifecycle test
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -88,13 +101,26 @@ When babelgit is used in a project, it creates/manages these files:
 ```
 user-project/
 ├── babel.config.yml              ← COMMITTED. Team config. The working agreement.
+├── .claude/
+│   └── settings.json             ← COMMITTED (if babel hook install run). PreToolUse hook config.
 └── .babel/                       ← GITIGNORED. Local state only.
     ├── state.json                ← Current work item and session state
     ├── counter.json              ← Incremental ID counter (if no external system)
     ├── checkpoints/              ← Attestation records
     │   ├── WI-001.json
     │   └── WI-002.json
-    └── run-session.json          ← Active run session state (exists only during babel run)
+    ├── notes/                    ← Living spec files (one per work item, Claude-maintained)
+    │   ├── WI-001.md
+    │   └── WI-002.md
+    ├── run-session.json          ← Active run session state (exists only during babel run)
+    ├── watch.pid                 ← Presence indicates daemon is running; contains PID
+    ├── watch-status.json         ← Daemon status snapshot (running, last_check, alerts)
+    └── watch-events.json         ← Append-only event log, capped at 200 entries
+```
+
+**On GitHub branches** (committed, visible in branch history):
+```
+docs/specs/WI-001.md              ← spec file committed to feature/WI-001-* branch by babel todo push
 ```
 
 ### `.gitignore` management
@@ -244,25 +270,32 @@ Everything else has sensible defaults.
 ### Work Item (`WorkItem`)
 ```typescript
 interface WorkItem {
-  id: string                    // "WI-001" or "PROJ-123"
+  id: string                    // "WI-001", "PROJ-123", or "DRAFT-{hex}" if offline
   description: string           // human-readable description
-  branch: string                // "feature/WI-001-auth-fix"
+  branch?: string               // "feature/WI-001-auth-fix" — absent for todo items until pushed
   stage: WorkflowStage          // current position in lifecycle
   created_at: string            // ISO timestamp
   created_by: string            // git user.email
+  planned_at?: string           // set when created via babel todo
   last_checkpoint?: Checkpoint  // most recent verified checkpoint
   paused_by?: string            // set when paused
   paused_at?: string            // set when paused
   paused_notes?: string         // set when paused
 }
 
-type WorkflowStage = 
+type WorkflowStage =
+  | 'todo'                      // planned, spec written, no branch or branch reserved but not started
   | 'in_progress'
   | 'paused'
   | 'run_session_open'          // babel run called, waiting for verdict
   | 'shipped'
   | 'stopped'
 ```
+
+**Notes on `todo` stage:**
+- `branch` is initially `null` but is set when `babel todo push` runs (or when `reserveWorkItemId` pushes the reservation branch)
+- `id` may be `DRAFT-{hex}` if the machine was offline when `babel todo` was called — the watch daemon resolves these to permanent IDs when connectivity returns
+- `babel start WI-XXX` transitions a `todo` item to `in_progress` and checks out its branch
 
 ### Checkpoint (Attestation Record)
 ```typescript
@@ -876,6 +909,108 @@ fatal: not a git repository (or any of the parent directories): .git
 ✗ No git repository found.
   Run this command from inside a git repository, or run 'git init' first.
 ```
+
+---
+
+---
+
+## v0.3 Command Specifications
+
+### `babel todo [action] [args]`
+
+**Actions:** `create` (default), `push`, `list`
+
+#### `babel todo "description"` (create)
+
+**Preconditions:** Valid `babel.config.yml` exists.
+
+**Behavior:**
+1. Call `reserveWorkItemId(description, config, repoPath)`:
+   - Attempts `git fetch origin --prune` (8s timeout)
+   - If offline/no remote: returns `{ id: 'DRAFT-{hex}', branch: null, isDraft: true }`
+   - If online: finds highest existing WI number on remote, tries `git push origin {baseRef}:refs/heads/{branch}` atomically — first writer wins
+   - If slot taken (rejected/already exists): increments and retries up to 10 times
+2. Create work item in `.babel/state.json` with `stage: 'todo'`
+3. Create `.babel/notes/{id}.md` as the living spec file
+4. Print: ID (permanent or draft), branch (if reserved), next steps
+
+**Draft resolution:** The watch daemon calls `resolveDrafts()` on a 30-second interval. When connectivity returns, each DRAFT item attempts reservation and the state entry and notes file are renamed to the permanent ID.
+
+**ID reservation contract:**
+- `src/core/reservation.ts` dispatches by `config.work_item_id.source`
+- Source `'local'`: atomic branch push to claim number
+- Source `'linear'` / `'jira'`: will create issue via API (not yet implemented — falls through to local with a warning)
+- Interface: `ReservationResult { id: string; branch: string | null; isDraft: boolean }`
+
+#### `babel todo push WI-XXX`
+
+1. Build branch name from WI ID and description
+2. If branch already exists on remote: use git worktree to update `docs/specs/{id}.md` and push
+3. If branch doesn't exist: create branch from base using git worktree, commit spec, push
+4. Update work item `branch` field in state
+
+**Spec file location:** `docs/specs/{id}.md` on the feature branch (committed, visible on GitHub). Source is `.babel/notes/{id}.md`.
+
+#### `babel todo list`
+
+Lists all `todo`-stage work items with IDs, descriptions, and whether pushed.
+
+---
+
+### `babel watch [action]`
+
+**Actions:** `start` (default), `stop`, `status`, `install`, `uninstall`
+
+The watch daemon (`src/core/watch.ts`) runs as a background process and monitors the repository.
+
+#### What the daemon does
+
+| Trigger | Response |
+|---------|----------|
+| File edit on tracked file, no active WI | Reverts via `git checkout -- {file}` |
+| `.babel/notes/{id}.md` change | Waits 3s (debounce), then pushes updated spec to GitHub branch via git worktree |
+| External commit on current branch | Logs `external_commit` event |
+| CI failure (requires `GITHUB_TOKEN`) | Logs `ci_failure` event |
+| `DRAFT-*` items in state | Attempts `resolveDrafts()` every 30s |
+
+**IPC files** (all in `.babel/`):
+- `watch.pid` — daemon PID; presence means running
+- `watch-status.json` — `{ running, pid, started_at, last_check, alerts[] }`
+- `watch-events.json` — append-only log, capped at 200 entries
+
+#### `babel watch install` / `babel watch uninstall` (macOS)
+
+Installs a launchd plist at `~/Library/LaunchAgents/com.babelgit.watch.{slug}.plist` with `KeepAlive: true` and `RunAtLoad: true`. The daemon auto-starts on login and is restarted by launchd if it crashes.
+
+---
+
+### `babel hook install` / `babel hook uninstall`
+
+Writes/removes a `PreToolUse` hook config in `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [{ "type": "command", "command": "babel hook-check-wi" }]
+      }
+    ]
+  }
+}
+```
+
+### `babel hook-check-wi`
+
+Invoked by Claude Code before every `Edit` or `Write` tool call. Walks up from `process.cwd()` to find `.babel/state.json`.
+
+- If no babel repo found: exit 0 (allow)
+- If active WI with `stage: 'in_progress'`: exit 0 (allow)
+- If active WI with any other stage: exit 2, print stage-specific message
+- If no active WI: exit 2, print what to do next
+
+Exit 2 causes Claude Code to block the tool call and surface the message to the agent.
 
 ---
 

@@ -22,7 +22,7 @@ That document tells you exactly what to build, in what order, and how to know wh
 The build documents are:
 ```
 docs/build/BUILD-BRIEF.md      ← start here
-docs/build/MVP-SPEC.md         ← scope definition  
+docs/build/MVP-SPEC.md         ← scope definition
 docs/build/TECHNICAL-SPEC.md   ← exact specifications
 ```
 
@@ -41,6 +41,41 @@ docs/build/TECHNICAL-SPEC.md   ← exact specifications
 
 ---
 
+## Pre-Tool Hook Enforcement (Critical — Read This)
+
+This repository has a Claude Code `PreToolUse` hook installed in `.claude/settings.json`. It runs `babel hook-check-wi` before every `Edit` or `Write` tool call.
+
+**If the hook blocks you, you will see:**
+
+```
+✗ Hook blocked: no active work item.
+
+  You have no work item in progress. Start or resume one before editing files.
+
+  babel start "description"   ← begin new work
+  babel continue BBL-XXX      ← resume paused work
+  babel todo "description"    ← plan it, start later
+```
+
+**This is not a bug. This is the product working correctly.**
+
+Do not attempt to:
+- Write files before starting a work item
+- Bypass the hook by using Bash to write files directly
+- Assume the hook is a technical error and try again
+
+Instead, start a work item first:
+```bash
+babel todo "what you're about to do"   # reserve an ID, then
+babel start BBL-XXX                    # or: babel start "description"
+```
+
+The hook also fires with a specific message if your current WI is in a non-editable stage (`paused`, `run_session_open`). Follow the message's instructions.
+
+**Why this exists:** Without this hook, an AI agent working in this repo can unknowingly edit files on `main` with no work item. The watch daemon reverts those edits silently, producing a confusing loop where edits appear to fail. The hook fires at the tool-call layer — before any write — and explains the problem in plain language.
+
+---
+
 ## What To Do If You Get Stuck
 
 1. Re-read `docs/build/TECHNICAL-SPEC.md` — the answer is probably there
@@ -54,11 +89,12 @@ docs/build/TECHNICAL-SPEC.md   ← exact specifications
 ## What Not To Do
 
 - Do not add dependencies without leaving a note in NOTES.md
-- Do not implement `babel undo` (requires shared checkpoint storage — v0.3)
+- Do not implement `babel undo` (requires shared checkpoint storage — v0.4)
 - Do not call git via shell string interpolation
 - Do not print git error messages directly to users — translate them
 - Do not add a `--force` flag to anything that bypasses governance
 - Do not modify the docs/strategy/ documents without explicit instruction
+- Do not attempt to write files when the pre-tool hook blocks you — start a WI first
 
 ---
 
@@ -86,6 +122,10 @@ If that passes and the integration test suite is green, v0.1 is done.
 ```
 babelgit/
 ├── CLAUDE.md                    ← you are here
+├── README.md                    ← product documentation
+├── babel.config.yml             ← this repo's own working agreement
+├── .claude/
+│   └── settings.json            ← Claude Code PreToolUse hook (checked in)
 ├── docs/
 │   ├── build/                   ← build target documents (read these)
 │   │   ├── BUILD-BRIEF.md
@@ -101,12 +141,55 @@ babelgit/
 │       ├── 02-COMMAND-REFERENCE.md
 │       ├── 03-WORKFLOWS-HOOKS-INTERNALS.md
 │       └── 04-PATTERNS-RECIPES-AGENTS.md
-├── src/                         ← write your code here
-│   ├── cli/commands/            ← one file per command
-│   ├── core/                    ← git, config, state, checkpoint, governance, scripts, hooks, rules
-│   ├── integrations/            ← linear, github, index
-│   ├── mcp/                     ← MCP server
-│   └── types.ts
+├── src/
+│   ├── cli/
+│   │   ├── index.ts             ← entry point, all command registration
+│   │   ├── display.ts           ← terminal output formatting
+│   │   └── commands/            ← one file per command
+│   │       ├── init.ts
+│   │       ├── start.ts         ← accepts WI ID to start a todo item
+│   │       ├── save.ts
+│   │       ├── sync.ts
+│   │       ├── pause.ts
+│   │       ├── continue.ts
+│   │       ├── stop.ts
+│   │       ├── run.ts
+│   │       ├── verdict.ts       ← keep/refine/reject/ship
+│   │       ├── state.ts
+│   │       ├── history.ts
+│   │       ├── ship.ts
+│   │       ├── config.ts
+│   │       ├── diag.ts
+│   │       ├── enforce.ts
+│   │       ├── todo.ts          ← babel todo create/push/list
+│   │       ├── watch.ts         ← babel watch start/stop/status/install/uninstall
+│   │       └── hook.ts          ← babel hook install/uninstall + hook-check-wi
+│   ├── core/
+│   │   ├── config.ts            ← babel.config.yml read/validate
+│   │   ├── governance.ts        ← enforcement layer
+│   │   ├── git.ts               ← all git operations via simple-git
+│   │   ├── state.ts             ← .babel/state.json read/write
+│   │   ├── checkpoint.ts        ← attestation creation and reading
+│   │   ├── workitem.ts          ← work item lifecycle, branch naming
+│   │   ├── reservation.ts       ← pluggable WI ID reservation (local/linear/jira)
+│   │   ├── watch.ts             ← watch daemon: file watcher, polling, spec sync
+│   │   ├── scripts.ts           ← run_commands execution via execa
+│   │   ├── hooks.ts             ← lifecycle hooks execution
+│   │   └── rules.ts             ← rules engine evaluation
+│   ├── integrations/
+│   │   ├── linear.ts
+│   │   ├── github.ts
+│   │   └── index.ts
+│   ├── mcp/
+│   │   ├── index.ts             ← MCP server entry point
+│   │   └── tools.ts             ← tool definitions
+│   └── types.ts                 ← shared TypeScript types
+├── vscode-extension/            ← VSCode sidebar extension
+│   ├── src/
+│   │   ├── extension.ts         ← activation, command registration
+│   │   ├── sidebarProvider.ts   ← Quick Actions + Board view tree providers
+│   │   └── stateWatcher.ts      ← watches .babel/ for changes, exposes state
+│   └── package.json
 ├── tests/                       ← vitest unit + integration tests
-└── sandbox/                     ← manual test scripts and scratch space (not committed to prod)
+└── sandbox/                     ← manual test scripts (not committed to prod)
 ```

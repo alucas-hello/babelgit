@@ -32,61 +32,24 @@ Five systemic failures in git's UX, documented in full in our research:
 babelgit/
 │
 ├── docs/
+│   ├── build/              ← Build spec documents
+│   │   ├── BUILD-BRIEF.md
+│   │   ├── MVP-SPEC.md
+│   │   └── TECHNICAL-SPEC.md
 │   ├── reference/          ← The Git Bible: complete technical reference
 │   │   ├── 01-CORE-CONCEPTS.md
 │   │   ├── 02-COMMAND-REFERENCE.md
 │   │   ├── 03-WORKFLOWS-HOOKS-INTERNALS.md
 │   │   └── 04-PATTERNS-RECIPES-AGENTS.md
-│   │
 │   ├── research/           ← UX research: why git fails people and how
 │   │   └── 05-UX-RESEARCH-REPORT.md
-│   │
-│   └── strategy/           ← Design decisions, architecture, roadmap
+│   └── strategy/           ← Design decisions, constraints, vocabulary
 │
-├── src/                    ← Implementation (when we get there)
+├── src/                    ← Implementation
+├── vscode-extension/       ← VSCode sidebar extension
 ├── tests/                  ← Test suite
-└── scripts/                ← Utilities and dev tooling
+└── .claude/                ← Claude Code hook config (pre-tool enforcement)
 ```
-
----
-
-## The Documentation Foundation
-
-Before writing a line of code, we built an exhaustive knowledge base. These documents are the ground truth for every design decision and implementation choice in this project.
-
-### The Git Bible (`docs/reference/`)
-
-**27,000+ words.** The most complete single-source git reference assembled. Every command, every flag, every internal — with explanations of why things work the way they do, not just how to use them.
-
-| File | Contents |
-|------|----------|
-| `01-CORE-CONCEPTS.md` | Object model, three trees, HEAD, refs, packfiles, the .git directory, revision syntax |
-| `02-COMMAND-REFERENCE.md` | Every porcelain and plumbing command with all flags documented |
-| `03-WORKFLOWS-HOOKS-INTERNALS.md` | Branching workflows, transfer protocol, hooks system, merge strategies, sparse checkout, attributes, performance |
-| `04-PATTERNS-RECIPES-AGENTS.md` | Golden rules, power recipes, anti-patterns, aliases, safe scripting, AI agent guidance, disaster recovery |
-
-### The UX Research (`docs/research/`)
-
-**5,600+ words.** A complete usability study synthesizing hundreds of sources — Stack Overflow threads, developer forums, non-programmer guides, AI agent failure analyses, the ohshitgit.com corpus — into a clear diagnosis of exactly where, why, and how git fails its users.
-
-Contains: the five failure modes, the full terminology audit, the four-location model, the 15 most common git emergencies, the anti-pattern hall of shame, the natural-language-to-git-vocabulary gap, design principles for the solution, and AI agent failure patterns.
-
----
-
-## Design Principles
-
-The UX research distills into ten principles that guide everything we build:
-
-1. **Express user intent, not git operations** — speak the language of "save, share, get, undo"
-2. **Make state visible** — always show branch, sync status, tree state, in-progress operations
-3. **Opinionated defaults, escapable** — one clear way to do things; power always accessible
-4. **Progressive disclosure** — 5 operations for beginners, 15 for intermediate, everything for experts
-5. **Describe consequences, not mechanisms** — "this will overwrite 2 commits on the shared branch" not "force push"
-6. **Pre-flight checks** — verify state before destructive operations
-7. **Graceful state recovery** — mid-operation states get clear continue/abort paths
-8. **Human-readable history** — recent actions described in plain language, not raw SHAs
-9. **The safety net should be visible** — reflog surfaced as "recent actions you can undo"
-10. **Agent-safe by default** — every operation checks state, verifies branch, prefers non-destructive, commits atomically
 
 ---
 
@@ -106,8 +69,12 @@ Requires Node.js >= 18 and git >= 2.28.
 # In any git repository:
 babel init
 
-# Start working on something
+# Plan work before starting a branch
+babel todo "redesign login screen"
+
+# Start working on something (new or from your todo list)
 babel start "fix login timeout on mobile"
+# or: babel start WI-001  ← picks up a todo item by ID
 
 # Save progress as you go
 babel save "auth flow working"
@@ -128,27 +95,105 @@ You never typed `git ___`.
 
 ## Commands
 
+### Core lifecycle
+
 | Command | What it does |
 |---------|-------------|
 | `babel init` | Set up babelgit in a repository |
-| `babel start` | Begin a new work item |
-| `babel save` | Checkpoint progress locally |
+| `babel todo "description"` | Plan a work item — reserves an ID, no branch yet |
+| `babel todo push WI-XXX` | Push todo spec to GitHub branch (makes it visible as a planned item) |
+| `babel todo list` | List all planned items |
+| `babel start [id-or-description]` | Begin a work item (new, or pick up a todo by ID) |
+| `babel save "notes"` | Checkpoint progress locally |
 | `babel sync` | Get current with the team |
-| `babel pause` | Leave work in handoff-ready state |
-| `babel continue` | Resume paused work |
-| `babel stop` | Abandon work entirely |
+| `babel pause "notes"` | Leave work in handoff-ready state |
+| `babel continue [WI-XXX]` | Resume paused work |
+| `babel stop "reason"` | Abandon work entirely |
 | `babel run` | Open a review session; lock the snapshot |
-| `babel keep/refine/reject/ship` | Call a verdict; create verified checkpoint |
-| `babel state` | Show current situation |
-| `babel history` | Show work item history and checkpoints |
+| `babel keep/refine/reject/ship "notes"` | Call a verdict; create verified checkpoint |
 | `babel ship` | Deliver work to production |
+
+### Observability & tooling
+
+| Command | What it does |
+|---------|-------------|
+| `babel state [WI-XXX]` | Show current situation |
+| `babel history [WI-XXX]` | Show work item history and checkpoints |
 | `babel enforce [on\|off\|status]` | Manage git operation enforcement hooks |
 | `babel config show/validate` | Inspect or validate your config |
 | `babel diag` | Check that your environment is set up correctly |
 
+### Watch daemon
+
+| Command | What it does |
+|---------|-------------|
+| `babel watch start` | Start the file watcher daemon |
+| `babel watch stop` | Stop the daemon |
+| `babel watch status` | Show daemon status and recent events |
+| `babel watch install` | Install as a launchd agent (macOS) — auto-starts on login, restarts on crash |
+| `babel watch uninstall` | Remove the launchd agent |
+
+### Claude Code integration
+
+| Command | What it does |
+|---------|-------------|
+| `babel hook install` | Write PreToolUse hook config to `.claude/settings.json` |
+| `babel hook uninstall` | Remove hook config |
+| `babel hook-check-wi` | Hook command invoked by Claude Code before Edit/Write tool calls |
+
+---
+
+## Planning with `babel todo`
+
+`babel todo` adds a lightweight planning layer before work begins. A todo item has an ID and a spec file but no branch, so it's tracked without cluttering your branch list.
+
+```bash
+babel todo "add dark mode support"
+# → BBL-042: add dark mode support
+# → Branch reserved on GitHub: feature/BBL-042-add-dark-mode-support
+# → Spec file: .babel/notes/BBL-042.md
+```
+
+**ID reservation is atomic.** babelgit immediately pushes a branch to GitHub to claim the ID — first writer wins. If you're offline, it assigns a temporary `DRAFT-{hex}` ID. The watch daemon resolves drafts to permanent IDs the next time connectivity is available.
+
+**GitHub as your board.** Push a spec once and GitHub's branch list becomes your planning board — every todo item has a branch, every branch has a spec commit in `docs/specs/`. No external tracker needed.
+
+**The watch daemon auto-syncs specs.** When you edit `.babel/notes/BBL-XXX.md`, the daemon detects it and pushes the updated spec to the branch automatically (3-second debounce).
+
+**Starting a todo item** promotes it from planned to in-progress:
+
+```bash
+babel start BBL-042        # picks up the todo, checks out its branch
+```
+
+---
+
+## The Watch Daemon
+
+`babel watch` runs a persistent background daemon that monitors the repository:
+
+| What it watches | What it does |
+|-----------------|-------------|
+| File edits with no active work item | Reverts them immediately |
+| `.babel/notes/WI-XXX.md` changes | Auto-syncs spec to GitHub branch (3s debounce) |
+| External commits on your branch | Logs an alert |
+| CI failures (requires `GITHUB_TOKEN`) | Logs an alert |
+| `DRAFT-*` work items | Resolves to permanent IDs when connectivity returns |
+
+**macOS persistent install:**
+
+```bash
+babel watch install    # installs as launchd agent — survives reboots
+babel watch uninstall  # removes it
+```
+
+The launchd agent uses `KeepAlive: true` — if the daemon crashes, launchd restarts it. State is exposed via `.babel/watch-status.json` and `.babel/watch-events.json` for the VSCode extension to read.
+
 ---
 
 ## Enforcement — Blocking Direct Git Operations
+
+### Git-level enforcement
 
 By default, `babel init` installs git hooks that **block any git operation not initiated by babel**. This applies equally to humans typing `git commit` in a terminal, AI agents using shell tools, and any other automation.
 
@@ -161,9 +206,7 @@ By default, `babel init` installs git hooks that **block any git operation not i
   To disable enforcement: babel enforce off
 ```
 
-**How it works:** Every `babel` process — CLI or MCP server — sets a `BABEL_ACTIVE` environment variable before running git. The hooks check for this variable. If it's absent, the operation is rejected. No tool, no agent, and no brand of AI assistant can bypass it without explicitly disabling enforcement.
-
-**What's covered:**
+**How it works:** Every `babel` process sets a `BABEL_ACTIVE` environment variable before running git. The hooks check for this variable. If it's absent, the operation is rejected.
 
 | Git operation | Blocked? | Hook |
 |---------------|----------|------|
@@ -172,21 +215,31 @@ By default, `babel init` installs git hooks that **block any git operation not i
 | `git rebase` | ✓ | `pre-rebase` |
 | `git fetch` | — | No git hook point |
 | `git checkout` | — | No git hook point |
-| `git pull` | — | No git hook point |
 
-fetch/checkout/pull are read operations or non-destructive to shared history, so the gap is acceptable.
+### Claude Code pre-tool enforcement
+
+`babel hook install` adds a second enforcement layer specifically for AI agents using Claude Code. It installs a `PreToolUse` hook in `.claude/settings.json` that fires before every `Edit` or `Write` tool call:
+
+```
+✗ Hook blocked: no active work item.
+
+  You have no work item in progress. Start or resume one before editing files.
+
+  babel start "description"   ← begin new work
+  babel continue BBL-XXX      ← resume paused work
+  babel todo "description"    ← plan it, start later
+```
+
+This hook is **already installed** in this repository. The hook fires at the tool-call layer, before any file is written, producing an actionable message rather than a silent revert.
 
 **Managing enforcement:**
 
 ```bash
-babel enforce           # interactive — shows status and prompts to toggle
-babel enforce on        # install hooks
-babel enforce off       # remove hooks
-babel enforce status    # show current status without prompting
-babel diag              # includes enforcement status in environment check
+babel enforce           # interactive — shows status, prompts to toggle
+babel hook install      # install Claude Code pre-tool hook
+babel hook uninstall    # remove it
+babel diag              # includes both enforcement statuses
 ```
-
-Enforcement hooks live in `.git/hooks/`, which is local to each machine and not committed. Each developer gets hooks installed when they run `babel init`. If a hook slot already has non-babel content (e.g., a linting pre-commit), babel skips that slot rather than overwriting it and reports the conflict in `babel diag`.
 
 ---
 
@@ -198,9 +251,21 @@ Enforcement hooks live in `.git/hooks/`, which is local to each machine and not 
 version: 1
 base_branch: main
 
+# Work item ID reservation
+work_item_id:
+  source: local          # "local" | "linear" | "jira"
+  prefix: "BBL"          # → BBL-001, BBL-002, ...
+
 # Require a verified checkpoint before shipping
 require_checkpoint_for:
   ship: true
+
+# Rename verdicts to match your team's vocabulary
+verdicts:
+  keep: keep
+  refine: refine
+  reject: reject
+  ship: deploy           # e.g. for a CD workflow
 
 # Run scripts during babel run
 run_commands:
@@ -253,12 +318,37 @@ Agents call `babel_state()` first, then operate within `permitted_operations`. T
 
 ---
 
+## VSCode Extension
+
+The babelgit VSCode extension (`vscode-extension/`) provides a sidebar with two panels:
+
+**Quick Actions** — context-sensitive commands for the current work item: save, run, pause, continue, ship, and (if not yet initialized) init.
+
+**Board** — all work items grouped by stage:
+
+| Bucket | Contents |
+|--------|----------|
+| Todo | Planned items with Start and Push to GitHub actions |
+| In Progress | Active work items |
+| Paused | Paused items with Continue action |
+| Review Open | Items in `babel run` session |
+| Complete / Deployed | Shipped items (label uses `verdicts.ship` from config) |
+| Stopped | Abandoned items |
+| Team (in In Progress) | Teammate branches parsed from `git branch -r` — visible but not actionable |
+
+**DRAFT items** in the Todo bucket display with a spinning indicator and "Waiting for ID reservation…" — Start and Push are disabled until the daemon resolves the ID.
+
+**Todo item actions:**
+- Click the item label → opens `.babel/notes/WI-XXX.md` spec locally
+- Start — runs `babel start WI-XXX`
+- Push spec / Sync spec — runs `babel todo push WI-XXX`
+- View on GitHub — opens branch on github.com (shown after first push)
+
+---
+
 ## Status
 
 **v0.1 — Core CLI & MCP server ✅**
-- ✅ Git Bible: complete technical reference
-- ✅ UX Research: usability study and failure mode analysis
-- ✅ Architecture and vocabulary design
 - ✅ Full 12-command CLI (init through ship)
 - ✅ Governance layer — config enforcement, agent restrictions, checkpoint requirements
 - ✅ MCP server — 13 tools for AI agent use
@@ -273,11 +363,40 @@ Agents call `babel_state()` first, then operate within `permitted_operations`. T
 - ✅ Workflow templates (solo, standard, CD, enterprise) in `babel init`
 - ✅ `babel config show/validate` and `babel diag`
 
-**v0.3 — Planned**
+**v0.3 — Planning layer, watch daemon, AI enforcement ✅**
+- ✅ `babel todo` — plan work items before starting a branch
+- ✅ Atomic WI ID reservation via GitHub branch push (first writer wins)
+- ✅ `DRAFT-{hex}` offline fallback with automatic resolution on reconnect
+- ✅ Pluggable ID sources: local, Linear, Jira (local implemented; Linear/Jira via same interface)
+- ✅ `babel watch` — persistent file watcher daemon
+- ✅ macOS launchd integration (`babel watch install`) — auto-restart on crash, persists across reboots
+- ✅ Spec auto-sync: daemon pushes `.babel/notes/*.md` changes to GitHub branches
+- ✅ VSCode extension with board view (stage buckets, todo actions, team visibility)
+- ✅ `babel hook install` — Claude Code `PreToolUse` enforcement hook
+- ✅ Hook blocks `Edit`/`Write` tool calls with no active work item; readable error replaces silent revert
+
+**v0.4 — Planned**
 - [ ] Shared checkpoint storage (push checkpoint records to git notes or branch)
 - [ ] `babel undo` — return to last keep checkpoint
 - [ ] Checkpoint signing (GPG/SSH)
 - [ ] Multi-repo / monorepo support
+
+---
+
+## Design Principles
+
+The UX research distills into ten principles that guide everything we build:
+
+1. **Express user intent, not git operations** — speak the language of "save, share, get, undo"
+2. **Make state visible** — always show branch, sync status, tree state, in-progress operations
+3. **Opinionated defaults, escapable** — one clear way to do things; power always accessible
+4. **Progressive disclosure** — 5 operations for beginners, 15 for intermediate, everything for experts
+5. **Describe consequences, not mechanisms** — "this will overwrite 2 commits on the shared branch" not "force push"
+6. **Pre-flight checks** — verify state before destructive operations
+7. **Graceful state recovery** — mid-operation states get clear continue/abort paths
+8. **Human-readable history** — recent actions described in plain language, not raw SHAs
+9. **The safety net should be visible** — reflog surfaced as "recent actions you can undo"
+10. **Agent-safe by default** — every operation checks state, verifies branch, prefers non-destructive, commits atomically
 
 ---
 
