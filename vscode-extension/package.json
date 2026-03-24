@@ -85,6 +85,11 @@
       {
         "command": "babelgit.watchStop",
         "title": "Babel: Stop Watcher"
+      },
+      {
+        "command": "babelgit.board",
+        "title": "Babel: Open Board",
+        "icon": "$(table)"
       }
     ],
     "viewsContainers": {
@@ -126,6 +131,11 @@
         {
           "command": "babelgit.history",
           "when": "view == babelgitActive",
+          "group": "navigation"
+        },
+        {
+          "command": "babelgit.board",
+          "when": "view == babelgitHistory",
           "group": "navigation"
         }
       ]

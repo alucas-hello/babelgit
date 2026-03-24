@@ -43,6 +43,7 @@ const sidebarProvider_1 = require("./sidebarProvider");
 const historyPanel_1 = require("./historyPanel");
 const runPanel_1 = require("./runPanel");
 const workItemPanel_1 = require("./workItemPanel");
+const boardPanel_1 = require("./boardPanel");
 function activate(context) {
     const outputChannel = vscode.window.createOutputChannel('babelgit');
     const watcher = new stateWatcher_1.StateWatcher();
@@ -231,6 +232,8 @@ function activate(context) {
         return Promise.resolve();
     }), cmd('babelgit.history', async () => {
         historyPanel_1.HistoryPanel.show(watcher);
+    }), cmd('babelgit.board', async () => {
+        boardPanel_1.BoardPanel.show(watcher);
     }), cmd('babelgit.openWorkItem', async (...args) => {
         const id = args[0];
         if (!id)

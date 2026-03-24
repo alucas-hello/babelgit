@@ -6,6 +6,7 @@ import { ActiveWorkProvider, HistoryProvider, ActionsProvider, WatcherProvider }
 import { HistoryPanel } from './historyPanel'
 import { RunPanel } from './runPanel'
 import { WorkItemPanel } from './workItemPanel'
+import { BoardPanel } from './boardPanel'
 
 export function activate(context: vscode.ExtensionContext): void {
   const outputChannel = vscode.window.createOutputChannel('babelgit')
@@ -225,6 +226,10 @@ export function activate(context: vscode.ExtensionContext): void {
 
     cmd('babelgit.history', async () => {
       HistoryPanel.show(watcher)
+    }),
+
+    cmd('babelgit.board', async () => {
+      BoardPanel.show(watcher)
     }),
 
     cmd('babelgit.openWorkItem', async (...args: unknown[]) => {
