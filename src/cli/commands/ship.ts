@@ -156,4 +156,24 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
   console.log()
   hint(`View history: babel history ${workItem.id}`)
   console.log()
+
+  // Prompt human callers to update docs
+  if (caller === 'human') {
+    const { updateDocs } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'updateDocs',
+        message: 'Would you like to update the docs?',
+        default: false,
+      },
+    ])
+    if (updateDocs) {
+      console.log()
+      console.log('  Docs worth updating:')
+      console.log('    README.md              ← user-facing commands, features, status')
+      console.log('    CLAUDE.md              ← working agreements, agent instructions')
+      console.log('    docs/build/MVP-SPEC.md ← scope changes')
+      console.log()
+    }
+  }
 }
