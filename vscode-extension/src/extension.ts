@@ -141,25 +141,22 @@ export function activate(context: vscode.ExtensionContext): void {
         'Trash it'
       )
       if (confirm !== 'Trash it') return
-      // For stuck run_session_open items, fix state directly then stop
-      if (wi?.stage === 'run_session_open' && watcher.currentWorkItem?.id !== id) {
-        const fs = require('fs') as typeof import('fs')
-        const path = require('path') as typeof import('path')
-        const root = watcher.workspacePath
-        if (root) {
-          const statePath = path.join(root, '.babel', 'state.json')
-          try {
-            const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
-            if (state.work_items[id]) {
-              state.work_items[id].stage = 'in_progress'
-              state.work_items[id].ship_ready = false
-              fs.writeFileSync(statePath, JSON.stringify(state, null, 2))
-            }
-          } catch { /* ignore */ }
-        }
+      // Write state directly — babel stop has an interactive y/N prompt we can't answer
+      const fs = require('fs') as typeof import('fs')
+      const path = require('path') as typeof import('path')
+      const root = watcher.workspacePath
+      if (root) {
+        const statePath = path.join(root, '.babel', 'state.json')
+        try {
+          const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+          if (state.work_items[id]) {
+            state.work_items[id].stage = 'stopped'
+            state.work_items[id].ship_ready = false
+          }
+          if (state.current_work_item_id === id) delete state.current_work_item_id
+          fs.writeFileSync(statePath, JSON.stringify(state, null, 2))
+        } catch { /* ignore */ }
       }
-      await runner.run(['continue', id]).catch(() => {})
-      await runner.run(['stop', `trashed from extension`])
       refreshAll()
     }),
 
