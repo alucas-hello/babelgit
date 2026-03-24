@@ -131,6 +131,38 @@ export function activate(context: vscode.ExtensionContext): void {
       refreshAll()
     }),
 
+    cmd('babelgit.deleteItem', async (...args: unknown[]) => {
+      const id = args[0] as string | undefined
+      if (!id) return
+      const wi = watcher.state?.work_items[id]
+      const confirm = await vscode.window.showWarningMessage(
+        `Trash "${wi?.description ?? id}"?`,
+        { modal: true },
+        'Trash it'
+      )
+      if (confirm !== 'Trash it') return
+      // For stuck run_session_open items, fix state directly then stop
+      if (wi?.stage === 'run_session_open' && watcher.currentWorkItem?.id !== id) {
+        const fs = require('fs') as typeof import('fs')
+        const path = require('path') as typeof import('path')
+        const root = watcher.workspacePath
+        if (root) {
+          const statePath = path.join(root, '.babel', 'state.json')
+          try {
+            const state = JSON.parse(fs.readFileSync(statePath, 'utf8'))
+            if (state.work_items[id]) {
+              state.work_items[id].stage = 'in_progress'
+              state.work_items[id].ship_ready = false
+              fs.writeFileSync(statePath, JSON.stringify(state, null, 2))
+            }
+          } catch { /* ignore */ }
+        }
+      }
+      await runner.run(['continue', id]).catch(() => {})
+      await runner.run(['stop', `trashed from extension`])
+      refreshAll()
+    }),
+
     cmd('babelgit.continueItem', async (...args: unknown[]) => {
       const id = args[0] as string | undefined
       if (!id) return
