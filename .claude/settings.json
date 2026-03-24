@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node scripts/agent-inbox-hook.js"
+            "command": "node scripts/agent-inbox-hook.cjs"
           }
         ]
       }
