@@ -11,6 +11,10 @@ import {
   loadCheckpoints,
 } from '../../core/checkpoint.js'
 import { detectCallerType } from '../../core/governance.js'
+import { evaluatePolicies } from '../../core/policy.js'
+import { showPolicyViolations } from '../display.js'
+import { getCurrentBranch } from '../../core/git.js'
+import { loadConfig as loadConfigForPolicy } from '../../core/config.js'
 import { timeAgoLabel } from '../../core/workitem.js'
 import { error, showCheckpointCreated, success, hint } from '../display.js'
 import { appendConversationEntry } from '../../core/conversation.js'
@@ -34,28 +38,50 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
   }
 
   const session = await loadRunSession(repoPath)
-  if (!session || session.status !== 'open') {
-    error("No active run session.", undefined, "Run 'babel run' first to open a review session.")
-    process.exit(1)
-  }
-
   const caller = detectCallerType()
 
-  if (caller === 'agent' && verdict === 'ship') {
-    error(
-      'Agents cannot declare a ship verdict.',
-      'A human must review the work and call: babel ship "what makes this ready"',
-      'This restriction exists to ensure a human signs off before any PR is opened or merge happens.'
-    )
-    process.exit(1)
+  // Evaluate policies for this verdict trigger
+  const config = await loadConfigForPolicy(repoPath).catch(() => null)
+  const currentBranch = await getCurrentBranch(repoPath).catch(() => 'unknown')
+
+  // Build policy context — include synthesized policies for verdict checks
+  if (config) {
+    // Ensure we have the standard verdict policies synthesized
+    ensureVerdictPolicies(config)
+
+    const policyResults = await evaluatePolicies(verdict === 'ship' ? 'ship_verdict' : verdict, {
+      trigger: verdict === 'ship' ? 'ship_verdict' : verdict,
+      caller,
+      branch: currentBranch,
+      config,
+      repoPath,
+      workItem: workItem!,
+      runSession: session,
+      notes,
+    })
+    const blocked = policyResults.filter(r => r.blocking && !r.permitted)
+    if (blocked.length > 0) {
+      showPolicyViolations(blocked)
+      process.exit(1)
+    }
+  } else {
+    // Fallback: basic checks if config can't be loaded
+    if (!session || session.status !== 'open') {
+      error("No active run session.", undefined, "Run 'babel run' first to open a review session.")
+      process.exit(1)
+    }
+    if (caller === 'agent' && verdict === 'ship') {
+      error('Agents cannot declare a ship verdict.')
+      process.exit(1)
+    }
+    if (caller === 'agent' && !notes) {
+      error('Agents must provide notes when calling a verdict.')
+      process.exit(1)
+    }
   }
 
-  if (caller === 'agent' && !notes) {
-    error(
-      'Agents must provide notes when calling a verdict.',
-      undefined,
-      `Call with notes: babel_attest("${verdict}", "what you verified")`
-    )
+  if (!session || session.status !== 'open') {
+    error("No active run session.", undefined, "Run 'babel run' first to open a review session.")
     process.exit(1)
   }
 
@@ -208,6 +234,47 @@ export async function runVerdict(verdict: Verdict, notes?: string, repoPath: str
   }
 
   console.log()
+}
+
+/**
+ * Ensure standard verdict policies are present (run session, agent-ship-denied, agent-notes-required).
+ * These are always active — not configurable via babel.config.yml.
+ */
+function ensureVerdictPolicies(config: import('../../types.js').BabelConfig): void {
+  if (!config.policies) config.policies = []
+  const names = new Set(config.policies.map(p => p.name))
+
+  if (!names.has('verdict-requires-run-session')) {
+    config.policies.push({
+      name: 'verdict-requires-run-session',
+      on: ['keep', 'refine', 'reject', 'ship_verdict'],
+      condition: 'has_open_run_session',
+      deny: "No active run session.",
+      suggest: "Run 'babel run' first to open a review session.",
+    })
+  }
+
+  if (!names.has('agent-ship-denied')) {
+    config.policies.push({
+      name: 'agent-ship-denied',
+      on: ['ship_verdict'],
+      when: { caller: 'agent' },
+      condition: 'always_deny',
+      deny: 'Agents cannot declare a ship verdict. A human must review the work and call: babel ship "what makes this ready"',
+      suggest: 'This restriction exists to ensure a human signs off before any PR is opened or merge happens.',
+    })
+  }
+
+  if (!names.has('agent-notes-required')) {
+    config.policies.push({
+      name: 'agent-notes-required',
+      on: ['keep', 'refine', 'reject', 'ship_verdict'],
+      when: { caller: 'agent' },
+      condition: 'notes_empty',
+      deny: 'Agents must provide notes when calling a verdict.',
+      suggest: 'Call with notes: babel_attest("<verdict>", "what you verified")',
+    })
+  }
 }
 
 async function postCheckpointToIntegrations(

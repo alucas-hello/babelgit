@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { checkBranchProtection, checkAgentBranchPermission, detectCallerType } from '../src/core/governance.js'
-import type { BabelConfig } from '../src/types.js'
+import { detectCallerType } from '../src/core/governance.js'
+import { evaluatePolicies } from '../src/core/policy.js'
+// Import to ensure conditions are registered
+import '../src/core/policy-conditions.js'
+import type { BabelConfig, PolicyContext } from '../src/types.js'
 
 const baseConfig: BabelConfig = {
   version: 1,
@@ -16,46 +19,89 @@ const baseConfig: BabelConfig = {
   },
   require_confirmation: ['stop', 'ship'],
   verdicts: { keep: 'keep', refine: 'refine', reject: 'reject', ship: 'ship' },
+  policies: [
+    {
+      name: 'branch-protection',
+      on: ['start', 'save', 'sync', 'pause', 'continue', 'stop', 'run', 'keep', 'refine', 'reject', 'ship_verdict', 'ship'],
+      condition: 'branch_is_protected',
+      deny: "Branch '{branch}' is protected and cannot be modified directly.",
+      suggest: "Use 'babel ship' to merge your work into the protected branch through the proper workflow.",
+    },
+    {
+      name: 'agent-branch-restriction',
+      on: ['start'],
+      when: { caller: 'agent' },
+      condition: 'branch_not_matching',
+      params: { patterns: ['feature/*', 'fix/*'] },
+      deny: "Agents are not permitted to operate on branch '{branch}'.",
+      suggest: "Permitted branch patterns: {patterns}. Create a new work item with 'babel_start()'.",
+    },
+  ],
+}
+
+function makeCtx(overrides: Partial<PolicyContext>): PolicyContext {
+  return {
+    trigger: 'save',
+    caller: 'human',
+    branch: 'feature/WI-001-test',
+    config: baseConfig,
+    repoPath: process.cwd(),
+    ...overrides,
+  }
 }
 
 describe('governance: branch protection', () => {
-  it('blocks operations on protected branches', () => {
-    const result = checkBranchProtection('main', baseConfig, 'human')
-    expect(result.permitted).toBe(false)
-    expect(result.reason).toContain('protected')
+  it('blocks operations on protected branches', async () => {
+    const results = await evaluatePolicies('save', makeCtx({ branch: 'main' }))
+    const bp = results.find(r => r.policy === 'branch-protection')
+    expect(bp).toBeDefined()
+    expect(bp!.permitted).toBe(false)
+    expect(bp!.reason).toContain('protected')
   })
 
-  it('allows operations on non-protected branches', () => {
-    const result = checkBranchProtection('feature/WI-001-test', baseConfig, 'human')
-    expect(result.permitted).toBe(true)
+  it('allows operations on non-protected branches', async () => {
+    const results = await evaluatePolicies('save', makeCtx({ branch: 'feature/WI-001-test' }))
+    const bp = results.find(r => r.policy === 'branch-protection')
+    expect(bp).toBeDefined()
+    expect(bp!.permitted).toBe(true)
   })
 
-  it('blocks operations on production branch', () => {
-    const result = checkBranchProtection('production', baseConfig, 'human')
-    expect(result.permitted).toBe(false)
+  it('blocks operations on production branch', async () => {
+    const results = await evaluatePolicies('save', makeCtx({ branch: 'production' }))
+    const bp = results.find(r => r.policy === 'branch-protection')
+    expect(bp).toBeDefined()
+    expect(bp!.permitted).toBe(false)
   })
 })
 
 describe('governance: agent branch permissions', () => {
-  it('allows agents on permitted patterns', () => {
-    const result = checkAgentBranchPermission('feature/WI-001-test', baseConfig, 'agent')
-    expect(result.permitted).toBe(true)
+  it('allows agents on permitted patterns', async () => {
+    const results = await evaluatePolicies('start', makeCtx({ caller: 'agent', branch: 'feature/WI-001-test' }))
+    const abr = results.find(r => r.policy === 'agent-branch-restriction')
+    expect(abr).toBeDefined()
+    expect(abr!.permitted).toBe(true)
   })
 
-  it('blocks agents on non-permitted branches', () => {
-    const result = checkAgentBranchPermission('experiment/test', baseConfig, 'agent')
-    expect(result.permitted).toBe(false)
-    expect(result.reason).toContain('not permitted')
+  it('blocks agents on non-permitted branches', async () => {
+    const results = await evaluatePolicies('start', makeCtx({ caller: 'agent', branch: 'experiment/test' }))
+    const abr = results.find(r => r.policy === 'agent-branch-restriction')
+    expect(abr).toBeDefined()
+    expect(abr!.permitted).toBe(false)
+    expect(abr!.reason).toContain('not permitted')
   })
 
-  it('allows humans on any branch', () => {
-    const result = checkAgentBranchPermission('experiment/test', baseConfig, 'human')
-    expect(result.permitted).toBe(true)
+  it('allows humans on any branch', async () => {
+    const results = await evaluatePolicies('start', makeCtx({ caller: 'human', branch: 'experiment/test' }))
+    const abr = results.find(r => r.policy === 'agent-branch-restriction')
+    // Policy has when: caller: 'agent', so it doesn't apply to humans
+    expect(abr).toBeUndefined()
   })
 
-  it('allows agents on fix/* branches', () => {
-    const result = checkAgentBranchPermission('fix/WI-002-bug', baseConfig, 'agent')
-    expect(result.permitted).toBe(true)
+  it('allows agents on fix/* branches', async () => {
+    const results = await evaluatePolicies('start', makeCtx({ caller: 'agent', branch: 'fix/WI-002-bug' }))
+    const abr = results.find(r => r.policy === 'agent-branch-restriction')
+    expect(abr).toBeDefined()
+    expect(abr!.permitted).toBe(true)
   })
 })
 

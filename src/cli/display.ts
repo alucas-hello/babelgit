@@ -1,4 +1,5 @@
 import chalk from 'chalk'
+import type { PolicyResult } from '../types.js'
 
 // ─── Git command display ──────────────────────────────────────────────────────
 
@@ -279,6 +280,25 @@ export function showPausedWorkItems(
 }
 
 // ─── Checkpoint created ───────────────────────────────────────────────────────
+
+// ─── Policy violations ───────────────────────────────────────────────────────
+
+export function showPolicyViolations(results: PolicyResult[]): void {
+  console.log()
+  for (const r of results) {
+    if (r.blocking) {
+      console.error(`  ${symbols.cross} ${chalk.bold(`[${r.policy}]`)} ${r.reason || 'Policy violation.'}`)
+    } else {
+      console.error(`  ${chalk.yellow('⚠')} ${chalk.bold(`[${r.policy}]`)} ${r.reason || 'Policy warning.'}`)
+    }
+    if (r.suggestion) {
+      console.error(`    ${chalk.dim('→')} ${r.suggestion}`)
+    }
+    console.log()
+  }
+}
+
+// ─── Checkpoint created ──────────────────────────────────────────────────────
 
 export function showCheckpointCreated(params: {
   verdict: string

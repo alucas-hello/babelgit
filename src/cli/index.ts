@@ -22,6 +22,7 @@ import { runEnforce } from './commands/enforce.js'
 import { runWatch } from './commands/watch.js'
 import { runTodo } from './commands/todo.js'
 import { runHookCheckWi, runHookInstall, runHookUninstall } from './commands/hook.js'
+import { runPolicyCheck } from './commands/policy-check.js'
 
 const program = new Command()
 
@@ -205,6 +206,13 @@ hookCmd
   .description('Remove PreToolUse hook config from .claude/settings.json')
   .action(async () => {
     await runHookUninstall(process.cwd())
+  })
+
+program
+  .command('policy-check [trigger]')
+  .description('Check which policies would block/warn for a given trigger')
+  .action(async (trigger?: string) => {
+    await runPolicyCheck(trigger)
   })
 
 program

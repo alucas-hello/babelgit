@@ -4,7 +4,9 @@ import { loadConfig } from '../../core/config.js'
 import { loadState, saveState, getNextLocalId, saveWorkItem, setCurrentWorkItem } from '../../core/state.js'
 import { fetchOrigin, checkoutNewBranch, getCurrentBranch, getUserEmail, localBranchExists, remoteExists } from '../../core/git.js'
 import { buildBranchName, isWorkItemId } from '../../core/workitem.js'
-import { detectCallerType, checkNoExistingWorkItem, checkAgentBranchPermission } from '../../core/governance.js'
+import { detectCallerType } from '../../core/governance.js'
+import { evaluatePolicies } from '../../core/policy.js'
+import { showPolicyViolations } from '../display.js'
 import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, hint, info } from '../display.js'
 import type { WorkItem, BabelConfig, BabelState } from '../../types.js'
@@ -25,10 +27,23 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
   const state = await loadState(repoPath)
   const caller = detectCallerType()
 
-  // Check no active work item
-  const existingCheck = checkNoExistingWorkItem(state.work_items)
-  if (!existingCheck.permitted) {
-    error('Cannot start new work item', existingCheck.reason, existingCheck.suggestion)
+  // Policy check: no active work item
+  const currentBranch = await getCurrentBranch(repoPath).catch(() => 'unknown')
+  const preStartResults = await evaluatePolicies('start', {
+    trigger: 'start',
+    caller,
+    branch: currentBranch,
+    config,
+    repoPath,
+    workItems: state.work_items,
+  })
+  // Only check the no-active-work-item policy at this stage (branch policies checked later)
+  const activeWiBlocked = preStartResults.filter(
+    r => r.blocking && !r.permitted && r.policy === 'no-active-work-item-check'
+  )
+  if (activeWiBlocked.length > 0) {
+    console.error('\n✗ Cannot start new work item:')
+    showPolicyViolations(activeWiBlocked)
     process.exit(1)
   }
 
@@ -71,10 +86,19 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
 
   const branchName = buildBranchName(id, description, config)
 
-  // Check agent branch permission
-  const agentCheck = checkAgentBranchPermission(branchName, config, caller)
-  if (!agentCheck.permitted) {
-    error('Branch not permitted for agents', agentCheck.reason, agentCheck.suggestion)
+  // Policy check: agent branch permission (evaluated against the new branch name)
+  const branchPolicies = await evaluatePolicies('start', {
+    trigger: 'start',
+    caller,
+    branch: branchName,
+    config,
+    repoPath,
+    workItems: state.work_items,
+  })
+  const branchBlocked = branchPolicies.filter(r => r.blocking && !r.permitted)
+  if (branchBlocked.length > 0) {
+    console.error('\n✗ Start blocked by policies:')
+    showPolicyViolations(branchBlocked)
     process.exit(1)
   }
 

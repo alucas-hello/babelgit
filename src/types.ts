@@ -205,6 +205,7 @@ export interface BabelConfig {
     after_pause?: string[]
   }
   rules?: Rule[]
+  policies?: PolicyDef[]
   integrations?: IntegrationsConfig
 }
 
@@ -216,6 +217,50 @@ export interface GovernanceCheck {
 
 export interface GovernanceResult {
   permitted: boolean
+  reason?: string
+  suggestion?: string
+}
+
+// ─── Policy as Code ──────────────────────────────────────────────────────────
+
+export type EnforcementLevel = 'hard' | 'soft' | 'advisory'
+
+export interface PolicyWhen {
+  caller?: CallerType
+  stage?: WorkflowStage | WorkflowStage[]
+}
+
+export interface PolicyDef {
+  name: string
+  on: string[]
+  when?: PolicyWhen
+  condition: string
+  params?: Record<string, unknown>
+  enforcement?: EnforcementLevel
+  deny: string
+  suggest?: string
+  enabled?: boolean
+}
+
+export interface PolicyContext {
+  trigger: string
+  caller: CallerType
+  branch: string
+  config: BabelConfig
+  repoPath: string
+  workItem?: WorkItem
+  workItems?: Record<string, WorkItem>
+  commitMessage?: string
+  changedFiles?: string[]
+  checkpoints?: Checkpoint[]
+  runSession?: RunSession | null
+  notes?: string
+}
+
+export interface PolicyResult {
+  policy: string
+  permitted: boolean
+  blocking: boolean
   reason?: string
   suggestion?: string
 }

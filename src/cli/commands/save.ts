@@ -1,10 +1,10 @@
 import { loadConfig } from '../../core/config.js'
 import { getCurrentWorkItem, saveWorkItem } from '../../core/state.js'
-import { addAll, commit, hasUncommittedChanges, getCurrentCommitSha, getShortSha } from '../../core/git.js'
+import { addAll, commit, hasUncommittedChanges, getCurrentCommitSha, getShortSha, getCurrentBranch } from '../../core/git.js'
 import { runHooks, hooksFailed } from '../../core/hooks.js'
-import { evaluateRules, formatViolations } from '../../core/rules.js'
+import { evaluatePolicies } from '../../core/policy.js'
 import { detectCallerType } from '../../core/governance.js'
-import { error, success, hint } from '../display.js'
+import { error, success, hint, showPolicyViolations } from '../display.js'
 import { appendConversationEntry, getChangedFiles } from '../../core/conversation.js'
 
 export async function runSave(notes?: string, repoPath: string = process.cwd()): Promise<void> {
@@ -46,20 +46,23 @@ export async function runSave(notes?: string, repoPath: string = process.cwd()):
   const config = await loadConfig(repoPath).catch(() => null)
 
   if (config) {
-    // Evaluate rules for 'save'
+    // Evaluate policies for 'save'
     const caller = detectCallerType()
     const message_preview = notes ? `save(${workItem.id}): ${notes}` : ''
-    const violations = await evaluateRules({
-      operation: 'save',
+    const currentBranch = await getCurrentBranch(repoPath).catch(() => workItem.branch || 'unknown')
+    const results = await evaluatePolicies('save', {
+      trigger: 'save',
       caller,
+      branch: currentBranch,
       config,
       repoPath,
+      workItem,
       commitMessage: message_preview,
     })
-    const blocking = violations.filter(v => v.blocking)
-    if (blocking.length > 0) {
-      console.log()
-      console.error(`\n✗ Save blocked by rules:\n\n${formatViolations(blocking)}\n`)
+    const blocked = results.filter(r => r.blocking && !r.permitted)
+    if (blocked.length > 0) {
+      console.error('\n✗ Save blocked by policies:')
+      showPolicyViolations(blocked)
       process.exit(1)
     }
 

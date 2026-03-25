@@ -1,7 +1,10 @@
 import { loadConfig } from '../../core/config.js'
 import { getCurrentWorkItem, saveWorkItem, setCurrentWorkItem } from '../../core/state.js'
 import { addAll, commit, push, hasUncommittedChanges, getUserEmail } from '../../core/git.js'
-import { detectCallerType, checkPauseRequirement } from '../../core/governance.js'
+import { detectCallerType } from '../../core/governance.js'
+import { loadCheckpoints, loadRunSession } from '../../core/checkpoint.js'
+import { evaluatePolicies } from '../../core/policy.js'
+import { showPolicyViolations } from '../display.js'
 import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, hint } from '../display.js'
 
@@ -27,10 +30,23 @@ export async function runPause(notes?: string, repoPath: string = process.cwd())
 
   const caller = detectCallerType()
 
-  // Governance check
-  const govCheck = await checkPauseRequirement(workItem, config, caller, repoPath)
-  if (!govCheck.permitted) {
-    error('Operation blocked: pause', govCheck.reason, govCheck.suggestion)
+  // Policy check
+  const checkpoints = await loadCheckpoints(workItem.id, repoPath).catch(() => [])
+  const runSession = await loadRunSession(repoPath).catch(() => null)
+  const policyResults = await evaluatePolicies('pause', {
+    trigger: 'pause',
+    caller,
+    branch: workItem.branch || 'unknown',
+    config,
+    repoPath,
+    workItem,
+    checkpoints,
+    runSession,
+  })
+  const blocked = policyResults.filter(r => r.blocking && !r.permitted)
+  if (blocked.length > 0) {
+    console.error('\n✗ Pause blocked by policies:')
+    showPolicyViolations(blocked)
     process.exit(1)
   }
 

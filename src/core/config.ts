@@ -2,7 +2,7 @@ import { readFile, writeFile, access } from 'fs/promises'
 import path from 'path'
 import { parse, stringify } from 'yaml'
 import { z } from 'zod'
-import type { BabelConfig } from '../types.js'
+import type { BabelConfig, PolicyDef } from '../types.js'
 
 const RunCommandSchema = z.object({
   name: z.string(),
@@ -78,6 +78,24 @@ const GitHubConfigSchema = z.object({
   pr_base_branch: z.string().optional(),
 })
 
+const PolicyDefSchema = z.object({
+  name: z.string(),
+  on: z.array(z.string()),
+  when: z.object({
+    caller: z.enum(['human', 'agent']).optional(),
+    stage: z.union([
+      z.enum(['todo', 'in_progress', 'paused', 'run_session_open', 'pr_open', 'merged', 'shipped', 'stopped']),
+      z.array(z.enum(['todo', 'in_progress', 'paused', 'run_session_open', 'pr_open', 'merged', 'shipped', 'stopped'])),
+    ]).optional(),
+  }).optional(),
+  condition: z.string(),
+  params: z.record(z.unknown()).optional(),
+  enforcement: z.enum(['hard', 'soft', 'advisory']).optional(),
+  deny: z.string(),
+  suggest: z.string().optional(),
+  enabled: z.boolean().optional(),
+})
+
 const HooksSchema = z.object({
   before_save: z.array(z.string()).default([]),
   after_save: z.array(z.string()).default([]),
@@ -126,6 +144,7 @@ const ConfigSchema = z.object({
   run_commands: z.array(RunCommandSchema).default([]),
   hooks: HooksSchema,
   rules: z.array(RuleSchema).default([]),
+  policies: z.array(PolicyDefSchema).optional(),
   integrations: z
     .object({
       linear: LinearConfigSchema.optional(),
@@ -148,14 +167,162 @@ export async function loadConfig(repoPath: string = process.cwd()): Promise<Babe
   try {
     const raw = await readFile(configPath, 'utf-8')
     const parsed = parse(raw)
-    const result = ConfigSchema.parse(parsed)
-    return result as BabelConfig
+    const result = ConfigSchema.parse(parsed) as BabelConfig
+    // Synthesize policies from v1 shortcut fields
+    result.policies = synthesizePolicies(result)
+    return result
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
       throw new Error('NO_CONFIG')
     }
     throw new Error(`Invalid babel.config.yml: ${(err as Error).message}`)
   }
+}
+
+/**
+ * Synthesize PolicyDef[] from v1 config fields (protected_branches, agents, rules, etc.)
+ * If an explicit policy with the same name exists in config.policies, the explicit one wins.
+ */
+function synthesizePolicies(config: BabelConfig): PolicyDef[] {
+  const explicit = config.policies || []
+  const explicitNames = new Set(explicit.map(p => p.name))
+  const synthesized: PolicyDef[] = []
+
+  const stateChangingOps = ['start', 'save', 'sync', 'pause', 'continue', 'stop', 'run', 'keep', 'refine', 'reject', 'ship_verdict', 'ship']
+
+  // Always synthesize no-active-work-item check for start
+  if (!explicitNames.has('no-active-work-item-check')) {
+    synthesized.push({
+      name: 'no-active-work-item-check',
+      on: ['start'],
+      condition: 'no_active_work_item',
+      deny: "There is already an active work item: {active_wi_id} — \"{active_wi_description}\".",
+      suggest: "Run 'babel pause' to pause current work, then start a new work item.",
+    })
+  }
+
+  // protected_branches → branch-protection policy
+  if (config.protected_branches.length > 0 && !explicitNames.has('branch-protection')) {
+    synthesized.push({
+      name: 'branch-protection',
+      on: stateChangingOps,
+      condition: 'branch_is_protected',
+      deny: "Branch '{branch}' is protected and cannot be modified directly.",
+      suggest: `Use 'babel ship' to merge your work into the protected branch through the proper workflow.`,
+    })
+  }
+
+  // agents.permitted_branch_patterns → agent-branch-restriction
+  if (config.agents.permitted_branch_patterns?.length > 0 && !explicitNames.has('agent-branch-restriction')) {
+    synthesized.push({
+      name: 'agent-branch-restriction',
+      on: ['start'],
+      when: { caller: 'agent' },
+      condition: 'branch_not_matching',
+      params: { patterns: config.agents.permitted_branch_patterns },
+      deny: "Agents are not permitted to operate on branch '{branch}'.",
+      suggest: `Permitted branch patterns: {patterns}. Create a new work item with 'babel_start()'.`,
+    })
+  }
+
+  // require_checkpoint_for.ship → ship-requires-checkpoint
+  if (config.require_checkpoint_for.ship && !explicitNames.has('ship-requires-checkpoint')) {
+    synthesized.push({
+      name: 'ship-requires-checkpoint',
+      on: ['ship'],
+      condition: 'has_checkpoint',
+      params: { verdict: ['ship', 'keep'], anchor: true },
+      deny: "No verified checkpoint. Run a review session first.",
+      suggest: "Run 'babel run' and call a verdict ('babel keep' or 'babel ship'), then try 'babel ship' again.",
+    })
+  }
+
+  // require_checkpoint_for.pause → pause-requires-checkpoint
+  if (config.require_checkpoint_for.pause && !explicitNames.has('pause-requires-checkpoint')) {
+    synthesized.push({
+      name: 'pause-requires-checkpoint',
+      on: ['pause'],
+      condition: 'has_checkpoint',
+      params: { anchor: true },
+      deny: "babel.config.yml requires a verified checkpoint before pausing.",
+      suggest: "Run 'babel run' and call 'babel keep' or 'babel ship', then try 'babel pause' again.",
+    })
+  }
+
+  // agents.require_attestation_before_pause → agent-pause-requires-attestation
+  if (config.agents.require_attestation_before_pause && !explicitNames.has('agent-pause-requires-attestation')) {
+    synthesized.push({
+      name: 'agent-pause-requires-attestation',
+      on: ['pause'],
+      when: { caller: 'agent' },
+      condition: 'all_of',
+      params: {
+        conditions: [
+          { condition: 'has_checkpoint', params: { min_count: 1 } },
+          { condition: 'no_open_run_session', params: {} },
+        ],
+      },
+      deny: "Agents must attest their work before pausing. Run a review session and close it with a verdict first.",
+      suggest: "Call 'babel_run()' then 'babel_attest()' before pausing.",
+    })
+  }
+
+  // Synthesize from rules entries
+  if (config.rules?.length) {
+    for (const rule of config.rules) {
+      if (explicitNames.has(rule.name)) continue
+
+      switch (rule.type) {
+        case 'commit_message_pattern':
+          synthesized.push({
+            name: rule.name,
+            on: rule.apply_to,
+            when: rule.caller && rule.caller !== 'any' ? { caller: rule.caller as 'human' | 'agent' } : undefined,
+            condition: 'commit_message_matches',
+            params: { pattern: rule.pattern },
+            enforcement: rule.blocking === false ? 'advisory' : 'hard',
+            deny: rule.message || `Commit message does not match required pattern: ${rule.pattern}`,
+          })
+          break
+        case 'path_restriction':
+          synthesized.push({
+            name: rule.name,
+            on: rule.apply_to,
+            when: rule.caller && rule.caller !== 'any' ? { caller: rule.caller as 'human' | 'agent' } : undefined,
+            condition: 'no_files_matching',
+            params: { patterns: rule.blocked_paths },
+            enforcement: rule.blocking === false ? 'advisory' : 'hard',
+            deny: rule.message || 'You are not permitted to modify restricted files: {matched_files}',
+          })
+          break
+        case 'files_changed':
+          synthesized.push({
+            name: rule.name,
+            on: rule.apply_to,
+            when: rule.caller && rule.caller !== 'any' ? { caller: rule.caller as 'human' | 'agent' } : undefined,
+            condition: 'files_coupled',
+            params: { if_changed: rule.if_changed, must_also_change: rule.require_also_changed },
+            enforcement: rule.blocking === false ? 'advisory' : 'hard',
+            deny: rule.message || `When changing files matching '{if_changed}', you must also change files matching '{must_also_change}'.`,
+          })
+          break
+        case 'script':
+          synthesized.push({
+            name: rule.name,
+            on: rule.apply_to,
+            when: rule.caller && rule.caller !== 'any' ? { caller: rule.caller as 'human' | 'agent' } : undefined,
+            condition: 'script_passes',
+            params: { command: rule.command },
+            enforcement: rule.blocking === false ? 'advisory' : 'hard',
+            deny: rule.message || `Rule script failed: ${rule.command} (exit {exit_code})`,
+          })
+          break
+      }
+    }
+  }
+
+  // Merge: explicit policies override synthesized ones
+  return [...synthesized, ...explicit]
 }
 
 export async function writeConfig(config: Partial<BabelConfig>, repoPath: string = process.cwd()): Promise<void> {

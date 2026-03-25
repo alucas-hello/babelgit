@@ -11,8 +11,10 @@ import {
   deleteRemoteBranch,
   remoteExists,
 } from '../../core/git.js'
-import { checkShipRequirement, detectCallerType } from '../../core/governance.js'
+import { detectCallerType } from '../../core/governance.js'
 import { loadCheckpoints } from '../../core/checkpoint.js'
+import { evaluatePolicies } from '../../core/policy.js'
+import { showPolicyViolations } from '../display.js'
 import { runHooks, hooksFailed } from '../../core/hooks.js'
 import { error, success, hint } from '../display.js'
 
@@ -42,10 +44,21 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
 
   const caller = detectCallerType()
 
-  // Governance check: ship requirement
-  const govCheck = await checkShipRequirement(workItem, config, repoPath)
-  if (!govCheck.permitted) {
-    error('Operation blocked: ship', govCheck.reason, govCheck.suggestion)
+  // Policy check: ship requirement
+  const checkpoints = await loadCheckpoints(workItem.id, repoPath).catch(() => [])
+  const policyResults = await evaluatePolicies('ship', {
+    trigger: 'ship',
+    caller,
+    branch: workItem.branch || config.base_branch,
+    config,
+    repoPath,
+    workItem,
+    checkpoints,
+  })
+  const blocked = policyResults.filter(r => r.blocking && !r.permitted)
+  if (blocked.length > 0) {
+    console.error('\n✗ Ship blocked by policies:')
+    showPolicyViolations(blocked)
     process.exit(1)
   }
 

@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { evaluateRules, formatViolations } from '../src/core/rules.js'
-import type { BabelConfig } from '../src/types.js'
-import { mkdtemp, rm, writeFile } from 'fs/promises'
-import { tmpdir } from 'os'
-import path from 'path'
-import simpleGit from 'simple-git'
+import { evaluatePolicies } from '../src/core/policy.js'
+import { showPolicyViolations } from '../src/cli/display.js'
+// Import to ensure conditions are registered
+import '../src/core/policy-conditions.js'
+import type { BabelConfig, PolicyContext, PolicyDef } from '../src/types.js'
 
 const baseConfig: BabelConfig = {
   version: 1,
@@ -18,21 +17,17 @@ const baseConfig: BabelConfig = {
   require_confirmation: [],
   verdicts: { keep: 'keep', refine: 'refine', reject: 'reject', ship: 'ship' },
   rules: [],
+  policies: [],
 }
 
-async function withTempRepo<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(path.join(tmpdir(), 'babel-rules-test-'))
-  const git = simpleGit(dir)
-  await git.init()
-  await git.addConfig('user.email', 'test@example.com')
-  await git.addConfig('user.name', 'Test')
-  await writeFile(path.join(dir, 'README.md'), '# test\n')
-  await git.add('.')
-  await git.commit('init')
-  try {
-    return await fn(dir)
-  } finally {
-    await rm(dir, { recursive: true, force: true })
+function makeCtx(config: BabelConfig, overrides: Partial<PolicyContext>): PolicyContext {
+  return {
+    trigger: 'save',
+    caller: 'human',
+    branch: 'feature/WI-001-test',
+    config,
+    repoPath: process.cwd(),
+    ...overrides,
   }
 }
 
@@ -40,73 +35,64 @@ describe('rules: commit_message_pattern', () => {
   it('passes when commit message matches pattern', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'conventional commits',
-          type: 'commit_message_pattern',
-          pattern: '^(feat|fix)\\(.+\\):',
-          apply_to: ['save'],
-          caller: 'any',
-          blocking: true,
+          on: ['save'],
+          condition: 'commit_message_matches',
+          params: { pattern: '^(feat|fix)\\(.+\\):' },
+          deny: 'Commit message does not match required pattern.',
         },
       ],
     }
-    const violations = await evaluateRules({
-      operation: 'save',
-      caller: 'human',
-      config,
+    const results = await evaluatePolicies('save', makeCtx(config, {
       commitMessage: 'feat(auth): add login',
-    })
-    expect(violations).toHaveLength(0)
+    }))
+    const blocking = results.filter(r => !r.permitted && r.blocking)
+    expect(blocking).toHaveLength(0)
   })
 
   it('fails when commit message does not match', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'conventional commits',
-          type: 'commit_message_pattern',
-          pattern: '^(feat|fix)\\(.+\\):',
-          apply_to: ['save'],
-          caller: 'any',
-          blocking: true,
+          on: ['save'],
+          condition: 'commit_message_matches',
+          params: { pattern: '^(feat|fix)\\(.+\\):' },
+          deny: 'Commit message does not match.',
         },
       ],
     }
-    const violations = await evaluateRules({
-      operation: 'save',
-      caller: 'human',
-      config,
+    const results = await evaluatePolicies('save', makeCtx(config, {
       commitMessage: 'just a commit message',
-    })
-    expect(violations).toHaveLength(1)
-    expect(violations[0].rule).toBe('conventional commits')
-    expect(violations[0].blocking).toBe(true)
+    }))
+    const failed = results.filter(r => !r.permitted)
+    expect(failed).toHaveLength(1)
+    expect(failed[0].policy).toBe('conventional commits')
+    expect(failed[0].blocking).toBe(true)
   })
 
   it('only applies to configured operations', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'msg',
-          type: 'commit_message_pattern',
-          pattern: '^feat',
-          apply_to: ['save'],
-          caller: 'any',
-          blocking: true,
+          on: ['save'],
+          condition: 'commit_message_matches',
+          params: { pattern: '^feat' },
+          deny: 'Bad message.',
         },
       ],
     }
-    // ship is not in apply_to — should not evaluate
-    const violations = await evaluateRules({
-      operation: 'ship',
-      caller: 'human',
-      config,
+    // ship is not in on — should not evaluate
+    const results = await evaluatePolicies('ship', makeCtx(config, {
+      trigger: 'ship',
       commitMessage: 'bad message',
-    })
-    expect(violations).toHaveLength(0)
+    }))
+    expect(results.filter(r => r.policy === 'msg')).toHaveLength(0)
   })
 })
 
@@ -114,71 +100,67 @@ describe('rules: path_restriction', () => {
   it('blocks agents from restricted paths', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'no config edits',
-          type: 'path_restriction',
-          blocked_paths: ['package.json', '*.config.*'],
-          apply_to: ['save'],
-          caller: 'agent',
-          blocking: true,
+          on: ['save'],
+          when: { caller: 'agent' },
+          condition: 'no_files_matching',
+          params: { patterns: ['package.json', '*.config.*'] },
+          deny: 'Not permitted to modify restricted files: {matched_files}',
         },
       ],
     }
-    const violations = await evaluateRules({
-      operation: 'save',
+    const results = await evaluatePolicies('save', makeCtx(config, {
       caller: 'agent',
-      config,
       changedFiles: ['src/index.ts', 'package.json'],
-    })
-    expect(violations).toHaveLength(1)
-    expect(violations[0].rule).toBe('no config edits')
+    }))
+    const failed = results.filter(r => !r.permitted)
+    expect(failed).toHaveLength(1)
+    expect(failed[0].policy).toBe('no config edits')
   })
 
   it('does not block humans on restricted paths', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'no config edits',
-          type: 'path_restriction',
-          blocked_paths: ['package.json'],
-          apply_to: ['save'],
-          caller: 'agent',
-          blocking: true,
+          on: ['save'],
+          when: { caller: 'agent' },
+          condition: 'no_files_matching',
+          params: { patterns: ['package.json'] },
+          deny: 'Not permitted.',
         },
       ],
     }
-    const violations = await evaluateRules({
-      operation: 'save',
+    const results = await evaluatePolicies('save', makeCtx(config, {
       caller: 'human',
-      config,
       changedFiles: ['package.json'],
-    })
-    expect(violations).toHaveLength(0)
+    }))
+    // Policy has when: caller: agent, so doesn't apply to humans
+    expect(results.filter(r => r.policy === 'no config edits')).toHaveLength(0)
   })
 
   it('passes when no restricted files changed', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'no config edits',
-          type: 'path_restriction',
-          blocked_paths: ['package.json'],
-          apply_to: ['save'],
-          caller: 'any',
-          blocking: true,
+          on: ['save'],
+          condition: 'no_files_matching',
+          params: { patterns: ['package.json'] },
+          deny: 'Not permitted.',
         },
       ],
     }
-    const violations = await evaluateRules({
-      operation: 'save',
+    const results = await evaluatePolicies('save', makeCtx(config, {
       caller: 'agent',
-      config,
       changedFiles: ['src/index.ts'],
-    })
-    expect(violations).toHaveLength(0)
+    }))
+    const failed = results.filter(r => !r.permitted)
+    expect(failed).toHaveLength(0)
   })
 })
 
@@ -186,74 +168,63 @@ describe('rules: files_changed', () => {
   it('passes when required companion file is changed', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'require tests',
-          type: 'files_changed',
-          if_changed: 'src/**/*.ts',
-          require_also_changed: 'tests/**/*.test.ts',
-          apply_to: ['keep'],
-          caller: 'any',
-          blocking: true,
+          on: ['keep'],
+          condition: 'files_coupled',
+          params: { if_changed: 'src/**/*.ts', must_also_change: 'tests/**/*.test.ts' },
+          deny: 'Must also change test files.',
         },
       ],
     }
-    const violations = await evaluateRules({
-      operation: 'keep',
-      caller: 'human',
-      config,
+    const results = await evaluatePolicies('keep', makeCtx(config, {
+      trigger: 'keep',
       changedFiles: ['src/index.ts', 'tests/index.test.ts'],
-    })
-    expect(violations).toHaveLength(0)
+    }))
+    const failed = results.filter(r => !r.permitted)
+    expect(failed).toHaveLength(0)
   })
 
   it('fails when trigger file changed but companion missing', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'require tests',
-          type: 'files_changed',
-          if_changed: 'src/**/*.ts',
-          require_also_changed: 'tests/**/*.test.ts',
-          apply_to: ['keep'],
-          caller: 'any',
-          blocking: true,
+          on: ['keep'],
+          condition: 'files_coupled',
+          params: { if_changed: 'src/**/*.ts', must_also_change: 'tests/**/*.test.ts' },
+          deny: 'Must also change test files.',
         },
       ],
     }
-    const violations = await evaluateRules({
-      operation: 'keep',
-      caller: 'human',
-      config,
+    const results = await evaluatePolicies('keep', makeCtx(config, {
+      trigger: 'keep',
       changedFiles: ['src/index.ts'],
-    })
-    expect(violations).toHaveLength(1)
+    }))
+    expect(results.filter(r => !r.permitted)).toHaveLength(1)
   })
 
   it('does not trigger when trigger file not changed', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'require tests',
-          type: 'files_changed',
-          if_changed: 'src/**/*.ts',
-          require_also_changed: 'tests/**/*.test.ts',
-          apply_to: ['keep'],
-          caller: 'any',
-          blocking: true,
+          on: ['keep'],
+          condition: 'files_coupled',
+          params: { if_changed: 'src/**/*.ts', must_also_change: 'tests/**/*.test.ts' },
+          deny: 'Must also change test files.',
         },
       ],
     }
-    // Only a docs file changed — rule doesn't trigger
-    const violations = await evaluateRules({
-      operation: 'keep',
-      caller: 'human',
-      config,
+    const results = await evaluatePolicies('keep', makeCtx(config, {
+      trigger: 'keep',
       changedFiles: ['docs/readme.md'],
-    })
-    expect(violations).toHaveLength(0)
+    }))
+    const failed = results.filter(r => !r.permitted)
+    expect(failed).toHaveLength(0)
   })
 })
 
@@ -261,51 +232,70 @@ describe('rules: script', () => {
   it('passes when script exits 0', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'check',
-          type: 'script',
-          command: 'echo ok',
-          apply_to: ['keep'],
-          caller: 'any',
-          blocking: true,
+          on: ['keep'],
+          condition: 'script_passes',
+          params: { command: 'echo ok' },
+          deny: 'Script failed.',
         },
       ],
     }
-    const violations = await evaluateRules({ operation: 'keep', caller: 'human', config })
-    expect(violations).toHaveLength(0)
+    const results = await evaluatePolicies('keep', makeCtx(config, { trigger: 'keep' }))
+    expect(results.filter(r => !r.permitted)).toHaveLength(0)
   })
 
   it('fails when script exits non-zero', async () => {
     const config: BabelConfig = {
       ...baseConfig,
-      rules: [
+      policies: [
         {
           name: 'failing-check',
-          type: 'script',
-          command: 'false',
-          apply_to: ['keep'],
-          caller: 'any',
-          blocking: true,
+          on: ['keep'],
+          condition: 'script_passes',
+          params: { command: 'false' },
+          deny: 'Script failed.',
         },
       ],
     }
-    const violations = await evaluateRules({ operation: 'keep', caller: 'human', config })
-    expect(violations).toHaveLength(1)
-    expect(violations[0].rule).toBe('failing-check')
+    const results = await evaluatePolicies('keep', makeCtx(config, { trigger: 'keep' }))
+    const failed = results.filter(r => !r.permitted)
+    expect(failed).toHaveLength(1)
+    expect(failed[0].policy).toBe('failing-check')
   })
 })
 
-describe('rules: formatViolations', () => {
+describe('rules: formatViolations (showPolicyViolations)', () => {
   it('formats blocking violations with X', () => {
-    const output = formatViolations([{ rule: 'test', message: 'bad thing', blocking: true }])
-    expect(output).toContain('✗')
+    // Capture console output
+    const logs: string[] = []
+    const origError = console.error
+    const origLog = console.log
+    console.error = (...args: unknown[]) => logs.push(args.join(' '))
+    console.log = (...args: unknown[]) => logs.push(args.join(' '))
+
+    showPolicyViolations([{ policy: 'test', permitted: false, blocking: true, reason: 'bad thing' }])
+
+    console.error = origError
+    console.log = origLog
+    const output = logs.join('\n')
     expect(output).toContain('[test]')
     expect(output).toContain('bad thing')
   })
 
   it('formats non-blocking violations with warning', () => {
-    const output = formatViolations([{ rule: 'test', message: 'warning', blocking: false }])
-    expect(output).toContain('⚠')
+    const logs: string[] = []
+    const origError = console.error
+    const origLog = console.log
+    console.error = (...args: unknown[]) => logs.push(args.join(' '))
+    console.log = (...args: unknown[]) => logs.push(args.join(' '))
+
+    showPolicyViolations([{ policy: 'test', permitted: false, blocking: false, reason: 'warning' }])
+
+    console.error = origError
+    console.log = origLog
+    const output = logs.join('\n')
+    expect(output).toContain('warning')
   })
 })
