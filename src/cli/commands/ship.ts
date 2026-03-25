@@ -10,6 +10,7 @@ import {
   deleteLocalBranch,
   deleteRemoteBranch,
   remoteExists,
+  notesPush,
 } from '../../core/git.js'
 import { checkShipRequirement, detectCallerType } from '../../core/governance.js'
 import { loadCheckpoints } from '../../core/checkpoint.js'
@@ -186,6 +187,18 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
   workItem.stage = 'shipped'
   await saveWorkItem(workItem, repoPath)
   await setCurrentWorkItem(undefined, repoPath)
+
+  // Push attestation notes to remote (best-effort, non-blocking)
+  try {
+    await notesPush('babel-checkpoints', repoPath)
+  } catch {
+    // No remote or notes not supported — OK
+  }
+  try {
+    await notesPush('babel-workitems', repoPath)
+  } catch {
+    // No remote or notes not supported — OK
+  }
 
   // after_ship hooks (non-blocking)
   await runHooks('after_ship', config, repoPath).catch(() => {})

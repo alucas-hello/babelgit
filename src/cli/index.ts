@@ -22,6 +22,7 @@ import { runEnforce } from './commands/enforce.js'
 import { runWatch } from './commands/watch.js'
 import { runTodo } from './commands/todo.js'
 import { runHookCheckWi, runHookInstall, runHookUninstall } from './commands/hook.js'
+import { runAttest } from './commands/attest.js'
 
 const program = new Command()
 
@@ -205,6 +206,16 @@ hookCmd
   .description('Remove PreToolUse hook config from .claude/settings.json')
   .action(async () => {
     await runHookUninstall(process.cwd())
+  })
+
+program
+  .command('attest')
+  .description('Share checkpoints and work item data with the team via git notes')
+  .option('--pull', 'Fetch shared attestation data from remote')
+  .option('--status', 'Show what is local-only vs shared')
+  .option('--log', 'Show shared attestation chain for current work item')
+  .action(async (opts: { pull?: boolean; status?: boolean; log?: boolean }) => {
+    await runAttest(opts)
   })
 
 program

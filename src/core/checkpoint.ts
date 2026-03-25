@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import path from 'path'
 import type { Checkpoint, RunSession, Verdict, CallerType, AutomationResult } from '../types.js'
 import { ensureBabelDir, getCheckpointPath, getRunSessionPath } from './state.js'
+import { DualCheckpointStore } from './checkpoint-store.js'
 
 export function computeFilesystemHash(statusPorcelain: string): string {
   if (!statusPorcelain.trim()) return ''
@@ -13,24 +14,16 @@ export async function loadCheckpoints(
   workItemId: string,
   repoPath: string = process.cwd()
 ): Promise<Checkpoint[]> {
-  const filePath = getCheckpointPath(workItemId, repoPath)
-  try {
-    const raw = await readFile(filePath, 'utf-8')
-    return JSON.parse(raw) as Checkpoint[]
-  } catch {
-    return []
-  }
+  const store = new DualCheckpointStore(repoPath)
+  return store.load(workItemId)
 }
 
 export async function appendCheckpoint(
   checkpoint: Checkpoint,
   repoPath: string = process.cwd()
 ): Promise<void> {
-  await ensureBabelDir(repoPath)
-  const filePath = getCheckpointPath(checkpoint.work_item_id, repoPath)
-  const existing = await loadCheckpoints(checkpoint.work_item_id, repoPath)
-  existing.push(checkpoint)
-  await writeFile(filePath, JSON.stringify(existing, null, 2), 'utf-8')
+  const store = new DualCheckpointStore(repoPath)
+  await store.append(checkpoint)
 }
 
 export async function createCheckpoint(params: {

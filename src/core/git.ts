@@ -295,3 +295,63 @@ export async function getLog(
     author_email: l.author_email,
   }))
 }
+
+// ─── Git Notes ───────────────────────────────────────────────────────────────
+
+export async function notesAdd(
+  ref: string,
+  commitSha: string,
+  content: string,
+  repoPath: string = process.cwd()
+): Promise<void> {
+  const git = createGit(repoPath)
+  await git.raw(['notes', `--ref=${ref}`, 'add', '-f', '-m', content, commitSha])
+}
+
+export async function notesFetch(
+  ref: string,
+  repoPath: string = process.cwd()
+): Promise<void> {
+  const git = createGit(repoPath)
+  await git.raw(['fetch', 'origin', `refs/notes/${ref}:refs/notes/${ref}`])
+}
+
+export async function notesPush(
+  ref: string,
+  repoPath: string = process.cwd()
+): Promise<void> {
+  const git = createGit(repoPath)
+  await git.raw(['push', 'origin', `refs/notes/${ref}`])
+}
+
+export async function notesShow(
+  ref: string,
+  commitSha: string,
+  repoPath: string = process.cwd()
+): Promise<string | null> {
+  try {
+    const git = createGit(repoPath)
+    const result = await git.raw(['notes', `--ref=${ref}`, 'show', commitSha])
+    return result.trim()
+  } catch {
+    return null
+  }
+}
+
+export async function notesListForRef(
+  ref: string,
+  repoPath: string = process.cwd()
+): Promise<string[]> {
+  try {
+    const git = createGit(repoPath)
+    const result = await git.raw(['notes', `--ref=${ref}`, 'list'])
+    if (!result.trim()) return []
+    return result.trim().split('\n').map(line => {
+      // Each line: <note-sha> <commit-sha>
+      const parts = line.trim().split(/\s+/)
+      return parts[1] || ''
+    }).filter(Boolean)
+  } catch {
+    return []
+  }
+}

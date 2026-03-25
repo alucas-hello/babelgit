@@ -59,10 +59,25 @@ export async function getWorkItem(id: string, repoPath: string = process.cwd()):
   return state.work_items[id] || null
 }
 
-export async function saveWorkItem(workItem: WorkItem, repoPath: string = process.cwd()): Promise<void> {
+export async function saveWorkItem(
+  workItem: WorkItem,
+  repoPath: string = process.cwd(),
+  anchorCommit?: string
+): Promise<void> {
   const state = await loadState(repoPath)
   state.work_items[workItem.id] = workItem
   await saveState(state, repoPath)
+
+  // Also write to notes store if an anchor commit is provided (best-effort)
+  if (anchorCommit) {
+    try {
+      const { NotesWIStore } = await import('./workitem-store.js')
+      const notesStore = new NotesWIStore(repoPath)
+      await notesStore.save(workItem, anchorCommit)
+    } catch {
+      // Notes write failed — not fatal, local is the source of truth
+    }
+  }
 }
 
 export async function setCurrentWorkItem(id: string | undefined, repoPath: string = process.cwd()): Promise<void> {

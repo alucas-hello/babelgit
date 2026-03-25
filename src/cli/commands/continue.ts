@@ -3,6 +3,9 @@ import { loadConfig } from '../../core/config.js'
 import { loadState, saveWorkItem, setCurrentWorkItem, findPausedWorkItems, findWorkItemByIdOrDescription } from '../../core/state.js'
 import { fetchOrigin, checkoutBranch, pullBranch, localBranchExists, checkoutNewBranch, remoteExists, getUserEmail } from '../../core/git.js'
 import { loadCheckpoints } from '../../core/checkpoint.js'
+import { DualCheckpointStore } from '../../core/checkpoint-store.js'
+import { DualWIStore } from '../../core/workitem-store.js'
+import { notesFetch } from '../../core/git.js'
 import { timeAgoLabel } from '../../core/workitem.js'
 import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, hint } from '../display.js'
@@ -87,6 +90,24 @@ export async function runContinue(workItemIdOrDesc?: string, repoPath: string = 
     error(`Branch '${workItem.branch!}' not found locally or on remote.`)
     process.exit(1)
   }
+
+  // Fetch notes and hydrate local state from shared attestation data
+  try {
+    await notesFetch('babel-checkpoints', repoPath)
+  } catch {
+    // No remote notes — OK
+  }
+  try {
+    await notesFetch('babel-workitems', repoPath)
+  } catch {
+    // No remote notes — OK
+  }
+
+  const checkpointStore = new DualCheckpointStore(repoPath)
+  await checkpointStore.hydrateLocal(workItem.id)
+
+  const wiStore = new DualWIStore(repoPath)
+  await wiStore.hydrateLocal(workItem.id)
 
   // Update state
   const pausedNotes = workItem.paused_notes
