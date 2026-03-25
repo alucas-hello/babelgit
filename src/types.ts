@@ -12,11 +12,18 @@ export type Verdict = 'keep' | 'refine' | 'reject' | 'ship'
 
 export type CallerType = 'human' | 'agent'
 
+export interface BranchRoute {
+  start_from: string
+  merge_to: string | string[]
+  pattern: string
+}
+
 export interface WorkItem {
   id: string
   description: string
   branch?: string
   stage: WorkflowStage
+  type?: string   // 'feature' | 'release' | 'hotfix' | custom
   created_at: string
   created_by: string
   planned_at?: string
@@ -192,6 +199,7 @@ export interface BabelConfig {
     reject: string
     ship: string
   }
+  branch_routes?: Record<string, BranchRoute>
   keep_branch_after_ship?: boolean
   run_commands?: RunCommandConfig[]
   hooks?: {

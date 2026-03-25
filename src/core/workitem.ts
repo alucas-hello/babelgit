@@ -1,4 +1,4 @@
-import type { BabelConfig } from '../types.js'
+import type { BabelConfig, BranchRoute } from '../types.js'
 
 export function toSlug(description: string): string {
   return description
@@ -9,10 +9,30 @@ export function toSlug(description: string): string {
     .slice(0, 40)
 }
 
-export function buildBranchName(id: string, description: string, config: BabelConfig): string {
+export function buildBranchName(id: string, description: string, config: BabelConfig, patternOverride?: string): string {
   const slug = toSlug(description)
-  const pattern = config.branch_pattern || 'feature/{id}-{slug}'
+  const pattern = patternOverride || config.branch_pattern || 'feature/{id}-{slug}'
   return pattern.replace('{id}', id).replace('{slug}', slug).replace('{prefix}', config.work_item_id.prefix)
+}
+
+export function resolveRoute(config: BabelConfig, type?: string): BranchRoute {
+  if (!config.branch_routes) {
+    return {
+      start_from: config.base_branch,
+      merge_to: config.base_branch,
+      pattern: config.branch_pattern || 'feature/{id}-{slug}',
+    }
+  }
+  const key = type || Object.keys(config.branch_routes)[0]
+  const route = config.branch_routes[key]
+  if (!route) {
+    return {
+      start_from: config.base_branch,
+      merge_to: config.base_branch,
+      pattern: config.branch_pattern || 'feature/{id}-{slug}',
+    }
+  }
+  return route
 }
 
 export function isWorkItemId(input: string): boolean {

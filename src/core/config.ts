@@ -15,6 +15,12 @@ const RunCommandSchema = z.object({
   env: z.record(z.string()).optional(),
 })
 
+const BranchRouteSchema = z.object({
+  start_from: z.string(),
+  merge_to: z.union([z.string(), z.array(z.string())]),
+  pattern: z.string(),
+})
+
 const RuleSchema = z.discriminatedUnion('type', [
   z.object({
     name: z.string(),
@@ -122,6 +128,7 @@ const ConfigSchema = z.object({
       ship: z.string().default('ship'),
     })
     .default({ keep: 'keep', refine: 'refine', reject: 'reject', ship: 'ship' }),
+  branch_routes: z.record(BranchRouteSchema).optional(),
   keep_branch_after_ship: z.boolean().default(false),
   run_commands: z.array(RunCommandSchema).default([]),
   hooks: HooksSchema,

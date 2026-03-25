@@ -3,13 +3,13 @@ import inquirer from 'inquirer'
 import { loadConfig } from '../../core/config.js'
 import { loadState, saveState, getNextLocalId, saveWorkItem, setCurrentWorkItem } from '../../core/state.js'
 import { fetchOrigin, checkoutNewBranch, getCurrentBranch, getUserEmail, localBranchExists, remoteExists } from '../../core/git.js'
-import { buildBranchName, isWorkItemId } from '../../core/workitem.js'
+import { buildBranchName, isWorkItemId, resolveRoute } from '../../core/workitem.js'
 import { detectCallerType, checkNoExistingWorkItem, checkAgentBranchPermission } from '../../core/governance.js'
 import { appendConversationEntry } from '../../core/conversation.js'
 import { error, success, hint, info } from '../display.js'
 import type { WorkItem, BabelConfig, BabelState } from '../../types.js'
 
-export async function runStart(idOrDescription?: string, repoPath: string = process.cwd()): Promise<void> {
+export async function runStart(idOrDescription?: string, opts: { type?: string } = {}, repoPath: string = process.cwd()): Promise<void> {
   const config = await loadConfig(repoPath).catch(err => {
     if (err.message === 'NO_CONFIG') {
       error(
@@ -69,7 +69,8 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
     id = await getNextLocalId(repoPath)
   }
 
-  const branchName = buildBranchName(id, description, config)
+  const route = resolveRoute(config, opts.type)
+  const branchName = buildBranchName(id, description, config, route.pattern)
 
   // Check agent branch permission
   const agentCheck = checkAgentBranchPermission(branchName, config, caller)
@@ -88,13 +89,13 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
     info('No remote found, skipping fetch.')
   }
 
-  let startPoint = `origin/${config.base_branch}`
-  const remoteBase = await remoteExists(config.base_branch, repoPath).catch(() => false)
+  let startPoint = `origin/${route.start_from}`
+  const remoteBase = await remoteExists(route.start_from, repoPath).catch(() => false)
   if (!remoteBase) {
     // Fallback to local base branch
-    const localExists = await localBranchExists(config.base_branch, repoPath).catch(() => false)
+    const localExists = await localBranchExists(route.start_from, repoPath).catch(() => false)
     if (localExists) {
-      startPoint = config.base_branch
+      startPoint = route.start_from
     } else {
       // Use HEAD
       startPoint = 'HEAD'
@@ -121,6 +122,7 @@ export async function runStart(idOrDescription?: string, repoPath: string = proc
     stage: 'in_progress',
     created_at: now,
     created_by: userEmail,
+    ...(opts.type ? { type: opts.type } : {}),
   }
 
   await saveWorkItem(workItem, repoPath)

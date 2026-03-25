@@ -40,8 +40,9 @@ program
 program
   .command('start [id-or-description]')
   .description('Begin a new work item')
-  .action(async (idOrDescription?: string) => {
-    await runStart(idOrDescription)
+  .option('-t, --type <type>', 'Work item type for branch routing (e.g. feature, release, hotfix)')
+  .action(async (idOrDescription?: string, options?: { type?: string }) => {
+    await runStart(idOrDescription, { type: options?.type })
   })
 
 program

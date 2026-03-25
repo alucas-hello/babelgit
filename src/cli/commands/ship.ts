@@ -14,7 +14,8 @@ import {
 import { checkShipRequirement, detectCallerType } from '../../core/governance.js'
 import { loadCheckpoints } from '../../core/checkpoint.js'
 import { runHooks, hooksFailed } from '../../core/hooks.js'
-import { error, success, hint } from '../display.js'
+import { resolveRoute } from '../../core/workitem.js'
+import { error, success, hint, info } from '../display.js'
 
 export async function runShip(repoPath: string = process.cwd()): Promise<void> {
   const config = await loadConfig(repoPath).catch(err => {
@@ -49,19 +50,24 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
     process.exit(1)
   }
 
+  const route = resolveRoute(config, workItem.type)
+  const mergeTargets = Array.isArray(route.merge_to) ? route.merge_to : [route.merge_to]
+
   // Human confirmation
   if (caller === 'human' && config.require_confirmation?.includes('ship')) {
     console.log()
     console.log(`  This will:`)
-    console.log(`    - Merge ${workItem.branch} → ${config.base_branch}`)
-    console.log(`    - Push to origin/${config.base_branch}`)
+    for (const target of mergeTargets) {
+      console.log(`    - Merge ${workItem.branch} → ${target}`)
+      console.log(`    - Push to origin/${target}`)
+    }
     console.log(`    - Delete branch: ${workItem.branch}`)
     console.log()
     const { confirm } = await inquirer.prompt([
       {
         type: 'confirm',
         name: 'confirm',
-        message: `Ship "${workItem.description}" to ${config.base_branch}?`,
+        message: `Ship "${workItem.description}" to ${mergeTargets.join(', ')}?`,
         default: true,
       },
     ])
@@ -80,6 +86,10 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
   }
 
   // GitHub PR path (if configured)
+  // When branch_routes is active, use the first merge target as PR base
+  if (config.integrations?.github && config.branch_routes) {
+    config.integrations.github.pr_base_branch = mergeTargets[0]
+  }
   if (config.integrations?.github?.enabled && config.integrations.github.ship_via_pr) {
     // Unconditional: a ship verdict checkpoint is always required before opening a PR.
     // This cannot be bypassed by config — a human must explicitly declare it ready.
@@ -145,26 +155,55 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
     // No remote — OK for local repos
   }
 
-  // Checkout base and pull
-  await checkoutBranch(config.base_branch, repoPath)
+  // Merge to each target branch sequentially
+  const completedTargets: string[] = []
+  for (const target of mergeTargets) {
+    try {
+      await checkoutBranch(target, repoPath)
+    } catch (err) {
+      if (completedTargets.length > 0) {
+        error(
+          `Failed to checkout target branch '${target}'.`,
+          (err as Error).message,
+          `Merge already completed to: ${completedTargets.join(', ')}. Resolve manually.`
+        )
+      } else {
+        error(`Failed to checkout target branch '${target}'.`, (err as Error).message)
+      }
+      process.exit(1)
+    }
 
-  try {
-    await pullBranch(config.base_branch, repoPath)
-  } catch {
-    // No remote
+    try {
+      await pullBranch(target, repoPath)
+    } catch {
+      // No remote
+    }
+
+    try {
+      await mergeNoFF(workBranch, `ship(${workItem.id}): ${workItem.description}`, repoPath)
+    } catch (err) {
+      if (completedTargets.length > 0) {
+        error(
+          `Merge to '${target}' failed.`,
+          (err as Error).message,
+          `Merge already completed to: ${completedTargets.join(', ')}. Resolve the conflict on '${target}' manually.`
+        )
+      } else {
+        error(`Merge to '${target}' failed.`, (err as Error).message)
+      }
+      process.exit(1)
+    }
+
+    try {
+      await push(target, repoPath)
+    } catch {
+      // No remote
+    }
+
+    completedTargets.push(target)
   }
 
-  // Merge work branch
-  await mergeNoFF(workBranch, `ship(${workItem.id}): ${workItem.description}`, repoPath)
-
-  // Push base branch
-  try {
-    await push(config.base_branch, repoPath)
-  } catch {
-    // No remote
-  }
-
-  // Clean up branches
+  // Clean up branches (only after ALL merges succeed)
   try {
     await deleteLocalBranch(workBranch, repoPath)
   } catch {
@@ -202,7 +241,9 @@ export async function runShip(repoPath: string = process.cwd()): Promise<void> {
   console.log()
   success(`Shipped: ${workItem.id} — "${workItem.description}"`)
   console.log()
-  console.log(`  Merged: ${workBranch} → ${config.base_branch}`)
+  for (const target of mergeTargets) {
+    console.log(`  Merged: ${workBranch} → ${target}`)
+  }
   console.log(`  Branch: deleted`)
   console.log()
   hint(`View history: babel history ${workItem.id}`)

@@ -10,6 +10,7 @@ import {
   commit,
   hasUncommittedChanges,
 } from '../../core/git.js'
+import { resolveRoute } from '../../core/workitem.js'
 import { error, success, info } from '../display.js'
 
 export async function runSync(
@@ -57,10 +58,13 @@ export async function runSync(
     await commit(`save(${workItem.id}): pre-sync snapshot`, repoPath)
   }
 
+  const route = resolveRoute(config, workItem.type)
+  const syncFrom = route.start_from
+
   try {
     await fetchOrigin(repoPath)
 
-    const onto = `origin/${config.base_branch}`
+    const onto = `origin/${syncFrom}`
 
     if (config.sync_strategy === 'rebase') {
       await rebase(onto, repoPath)
@@ -82,7 +86,7 @@ export async function runSync(
     }
 
     console.log()
-    success(`Synced with origin/${config.base_branch}`)
+    success(`Synced with origin/${syncFrom}`)
     console.log()
   } catch (err) {
     const msg = (err as Error).message || ''
