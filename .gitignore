@@ -3,4 +3,5 @@ dist/
 *.js.map
 .DS_Store
 .babel/
+.claude/worktrees/
 sandbox/test-repos/
